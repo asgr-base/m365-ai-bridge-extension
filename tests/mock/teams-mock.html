@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Teams Mock - General</title>
+</head>
+<body>
+  <!-- Teams チャンネル名 -->
+  <div data-tid="channel-name">General</div>
+
+  <!-- メッセージ一覧（Teams の実際の DOM 構造を模倣） -->
+  <div class="message-list">
+
+    <div data-track-action-scenario="message-1">
+      <div data-tid="message-author-name">田中 太郎</div>
+      <time data-tid="message-timestamp" datetime="2026-02-26T09:00:00Z">09:00</time>
+      <div data-tid="message-body">
+        <div data-tid="message-body-content">おはようございます。今日のスプリントレビューの準備できていますか？</div>
+      </div>
+    </div>
+
+    <div data-track-action-scenario="message-2">
+      <div data-tid="message-author-name">山田 花子</div>
+      <time data-tid="message-timestamp" datetime="2026-02-26T09:05:00Z">09:05</time>
+      <div data-tid="message-body">
+        <div data-tid="message-body-content">はい、資料は昨日完成しました。共有します。</div>
+      </div>
+    </div>
+
+    <div data-track-action-scenario="message-3">
+      <div data-tid="message-author-name">都甲 篤史</div>
+      <time data-tid="message-timestamp" datetime="2026-02-26T09:10:00Z">09:10</time>
+      <div data-tid="message-body">
+        <div data-tid="message-body-content">ありがとうございます。13時から会議室Bで開始します。</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- 返信フォーム -->
+  <div data-tid="ckeditor" contenteditable="true" role="textbox" aria-label="返信を入力"></div>
+  <button data-tid="sendMessageCommands-send">送信</button>
+
+  <script>
+    // テスト用: content script が注入されたことを確認するフラグ
+    window.__teamsPageReady = true;
+  </script>
+</body>
+</html>
