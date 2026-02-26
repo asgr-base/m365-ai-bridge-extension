@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>M365 AI Bridge</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      width: 320px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 13px;
+      color: #333;
+      background: #fff;
+    }
+
+    header {
+      background: #464EB8;
+      color: white;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    header h1 {
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    header .badge {
+      font-size: 10px;
+      background: rgba(255,255,255,0.3);
+      padding: 1px 6px;
+      border-radius: 10px;
+    }
+
+    .section {
+      padding: 12px 16px;
+      border-bottom: 1px solid #eee;
+    }
+
+    .section:last-child { border-bottom: none; }
+
+    .section-title {
+      font-size: 11px;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+
+    .status-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #ccc;
+      flex-shrink: 0;
+    }
+
+    .status-dot.ok { background: #4CAF50; }
+    .status-dot.error { background: #f44336; }
+    .status-dot.loading { background: #FF9800; animation: pulse 1s infinite; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    .status-label { flex: 1; color: #555; }
+    .status-value { font-size: 11px; color: #999; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    button {
+      width: 100%;
+      padding: 8px 12px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 13px;
+      font-family: inherit;
+      transition: background 0.15s;
+    }
+
+    .btn-primary {
+      background: #464EB8;
+      color: white;
+    }
+
+    .btn-primary:hover { background: #3d44a3; }
+    .btn-primary:disabled { background: #bbb; cursor: not-allowed; }
+
+    .btn-secondary {
+      background: #f0f0f0;
+      color: #333;
+      margin-top: 6px;
+    }
+
+    .btn-secondary:hover { background: #e0e0e0; }
+
+    .output {
+      background: #f8f8f8;
+      border: 1px solid #e0e0e0;
+      border-radius: 4px;
+      padding: 8px;
+      margin-top: 8px;
+      font-size: 11px;
+      font-family: monospace;
+      max-height: 120px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      color: #555;
+    }
+
+    .output.error { color: #c62828; background: #ffebee; border-color: #ffcdd2; }
+    .output.success { color: #1b5e20; background: #f1f8e9; border-color: #c8e6c9; }
+
+    .footer {
+      padding: 8px 16px;
+      background: #f5f5f5;
+      font-size: 11px;
+      color: #999;
+      text-align: center;
+    }
+
+    .bridge-url {
+      font-family: monospace;
+      font-size: 11px;
+      background: #f0f0f0;
+      padding: 4px 8px;
+      border-radius: 3px;
+      color: #555;
+      display: block;
+      margin-top: 4px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+    </svg>
+    <h1>M365 AI Bridge</h1>
+    <span class="badge">PoC</span>
+  </header>
+
+  <div class="section">
+    <div class="section-title">接続状態</div>
+    <div class="status-row">
+      <div class="status-dot loading" id="teams-dot"></div>
+      <span class="status-label">Teams タブ</span>
+      <span class="status-value" id="teams-status">確認中...</span>
+    </div>
+    <div class="status-row">
+      <div class="status-dot loading" id="bridge-dot"></div>
+      <span class="status-label">ブリッジサーバー</span>
+      <span class="status-value" id="bridge-status">確認中...</span>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">操作</div>
+    <button class="btn-primary" id="read-btn">メッセージを読み取る</button>
+    <div class="output" id="output" style="display:none;"></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">ブリッジサーバー</div>
+    <p style="color:#666; margin-bottom:4px;">Claude Code側でサーバーを起動:</p>
+    <code class="bridge-url">node native/bridge-server.js</code>
+  </div>
+
+  <div class="footer">M365 AI Bridge v0.1.0 Phase 1 PoC</div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

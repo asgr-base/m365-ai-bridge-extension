@@ -1,0 +1,96 @@
+'use strict';
+
+const BRIDGE_URL = 'http://localhost:3765';
+
+// ========== DOM 要素 ==========
+const teamsDot = document.getElementById('teams-dot');
+const teamsStatus = document.getElementById('teams-status');
+const bridgeDot = document.getElementById('bridge-dot');
+const bridgeStatus = document.getElementById('bridge-status');
+const readBtn = document.getElementById('read-btn');
+const output = document.getElementById('output');
+
+// ========== 状態表示 ==========
+
+function setStatus(dotEl, labelEl, state, text) {
+  dotEl.className = `status-dot ${state}`;
+  labelEl.textContent = text;
+}
+
+function showOutput(text, type = 'normal') {
+  output.style.display = 'block';
+  output.className = `output ${type}`;
+  output.textContent = text;
+}
+
+// ========== 初期化: 接続状態チェック ==========
+
+async function checkStatus() {
+  // Teams タブの確認
+  try {
+    const res = await chrome.runtime.sendMessage({ action: 'GET_STATUS' });
+    if (res?.status?.teamsTabFound) {
+      setStatus(teamsDot, teamsStatus, 'ok', '接続済み');
+    } else {
+      setStatus(teamsDot, teamsStatus, 'error', '未検出');
+    }
+  } catch (err) {
+    setStatus(teamsDot, teamsStatus, 'error', 'エラー');
+  }
+
+  // ブリッジサーバーの確認
+  try {
+    const res = await fetch(`${BRIDGE_URL}/health`, { signal: AbortSignal.timeout(2000) });
+    if (res.ok) {
+      setStatus(bridgeDot, bridgeStatus, 'ok', '起動中');
+    } else {
+      setStatus(bridgeDot, bridgeStatus, 'error', `HTTP ${res.status}`);
+    }
+  } catch {
+    setStatus(bridgeDot, bridgeStatus, 'error', '未起動');
+  }
+}
+
+// ========== メッセージ読み取り ==========
+
+readBtn.addEventListener('click', async () => {
+  readBtn.disabled = true;
+  readBtn.textContent = '読み取り中...';
+  showOutput('Teams からメッセージを取得中...', 'normal');
+
+  try {
+    const res = await chrome.runtime.sendMessage({ action: 'READ_MESSAGES' });
+    if (res?.success && res?.data) {
+      const { context, messages, method } = res.data;
+      const summary = [
+        `取得方法: ${method}`,
+        `コンテキスト: ${context.channelName || context.chatTitle || context.pageTitle}`,
+        `メッセージ数: ${messages.length}件`,
+        '',
+        ...messages.slice(0, 5).map((m, i) =>
+          `[${i + 1}] ${m.sender}: ${m.body.slice(0, 60)}${m.body.length > 60 ? '...' : ''}`
+        ),
+        messages.length > 5 ? `... 他 ${messages.length - 5} 件` : '',
+      ].filter(Boolean).join('\n');
+
+      showOutput(summary, 'success');
+
+      // ブリッジサーバーへ転送（未起動でも問題なし）
+      fetch(`${BRIDGE_URL}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(res.data),
+      }).catch(() => {});
+    } else {
+      showOutput(`エラー: ${res?.error || 'メッセージ取得失敗'}`, 'error');
+    }
+  } catch (err) {
+    showOutput(`例外: ${err.message}`, 'error');
+  } finally {
+    readBtn.disabled = false;
+    readBtn.textContent = 'メッセージを読み取る';
+  }
+});
+
+// ========== 起動 ==========
+checkStatus();
