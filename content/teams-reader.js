@@ -69,13 +69,22 @@ function debounce(fn, ms) {
 function extractMessages() {
   const messages = [];
 
-  // 新UI: channel-pane-message コンテナから取得
+  // channel-pane-message の「外側」にある message-body を DM メッセージとして優先取得
+  // Teams SPA はチャンネル DOM をキャッシュするため、DM 表示中でも channel-pane-message が残る
+  // → 外側の message-body がある = DM が表示されている
+  const allBodies = document.querySelectorAll(SELECTORS.messageBody);
+  const dmBodies = Array.from(allBodies).filter(
+    el => !el.closest(SELECTORS.messageContainer)
+  );
+  if (dmBodies.length > 0) {
+    const dmResult = extractMessagesByBody(dmBodies);
+    if (dmResult && dmResult.messages.length > 0) return dmResult;
+  }
+
+  // 新UI: channel-pane-message コンテナから取得（チャンネル用）
   const containers = document.querySelectorAll(SELECTORS.messageContainer);
 
   if (containers.length === 0) {
-    // 中間パス: message-body 要素から親を辿る（DM チャット向け）
-    const dmResult = extractMessagesByBody();
-    if (dmResult && dmResult.messages.length > 0) return dmResult;
     // 最終フォールバック
     return extractMessagesFallback();
   }
@@ -134,10 +143,11 @@ function extractMessages() {
 
 /**
  * DM チャット向け: [data-tid="message-body"] から親を辿って送信者を探す
+ * @param {Element[]|NodeList} [bodyElements] - 対象の message-body 要素（省略時は全件取得）
  */
-function extractMessagesByBody() {
-  const messageBodies = document.querySelectorAll(SELECTORS.messageBody);
-  if (messageBodies.length === 0) return null;
+function extractMessagesByBody(bodyElements) {
+  const messageBodies = bodyElements || document.querySelectorAll(SELECTORS.messageBody);
+  if (!messageBodies || messageBodies.length === 0) return null;
 
   const context = getCurrentContext();
   const messages = [];
