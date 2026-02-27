@@ -106,8 +106,8 @@ npx playwright test
 - [x] MCP サーバー（stdio）で Claude Code と接続
 - [x] Extension ポップアップ UI
 - [x] Playwright テスト（19件）
-- [ ] Teams DOM セレクタの実機検証・調整
-- [ ] エンドツーエンドの動作確認
+- [x] Teams DOM セレクタの実機検証・調整（2026-02-27: teams.cloud.microsoft 新UI対応）
+- [ ] エンドツーエンドの動作確認（MCP経由でClaude Codeからメッセージ取得）
 
 ### Phase 2: 安定化
 - [ ] Extension → MCP サーバーへのリアルタイムプッシュ（ポーリング廃止）
