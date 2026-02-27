@@ -456,12 +456,22 @@ function inspectDom() {
     });
   }
 
+  // 7. iframeの検出
+  const iframes = document.querySelectorAll('iframe');
+  results.iframes = Array.from(iframes).map(f => ({
+    src: f.src || '(no src)',
+    id: f.id || null,
+    name: f.name || null,
+  }));
+
   results.summary = {
     dataTidCount: tidElements.length,
     uniqueTids: Object.keys(tidMap).length,
     messageCandidates: results.messageCandidate.length,
     senderCandidates: results.senderCandidate.length,
     url: window.location.href,
+    iframeCount: iframes.length,
+    frameType: window === window.top ? 'top-frame' : 'child-frame',
   };
 
   return results;

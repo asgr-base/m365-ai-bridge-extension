@@ -131,6 +131,13 @@ inspectBtn.addEventListener('click', async () => {
         ...d.replyBoxCandidate.map(c =>
           `  ${c.selector}: ${c.count}件 tag=${c.sampleTag}`
         ),
+        '',
+        `--- フレーム情報 ---`,
+        `  frameType: ${d.summary.frameType || '不明'}`,
+        `  iframes: ${d.summary.iframeCount ?? '?'}件`,
+        ...(d.iframes || []).slice(0, 10).map(f =>
+          `    src=${f.src.slice(0, 80)} id=${f.id}`
+        ),
       ];
 
       showOutput(lines.join('\n'), 'success');
