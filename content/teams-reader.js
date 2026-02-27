@@ -23,6 +23,7 @@ const CONFIG = {
 // ※ Teams の UI 更新で壊れる可能性あり。定期的に検証が必要。
 // 最終検証: 2026-02-27 (teams.cloud.microsoft 新UI)
 const SELECTORS = {
+  // === チャンネル用 ===
   // 個別メッセージのコンテナ
   messageContainer: '[data-tid="channel-pane-message"]',
   // メッセージの本文（コンテナ内）
@@ -33,6 +34,16 @@ const SELECTORS = {
   senderHeader: '[data-tid="post-message-subheader"], [data-tid="reply-message-header"]',
   // タイムスタンプ
   timestamp: '[data-tid="timestamp"]',
+
+  // === DM / グループチャット用 ===
+  // チャットアイテム外枠（メッセージごとの wrapper）
+  dmChatItem: '[data-tid="chat-pane-item"]',
+  // チャットメッセージ本文（id="message-body-{timestamp}"）
+  dmMessageBody: '[data-tid="chat-pane-message"]',
+  // 送信者名（DM 専用。チャンネルの span[id^="author-"] に相当）
+  dmSenderName: '[data-tid="message-author-name"]',
+
+  // === 共通 ===
   // 現在のチャンネル名
   channelName: '[data-tid="channelTitle-text"]',
   // 現在のチャット相手
@@ -66,22 +77,64 @@ function debounce(fn, ms) {
  * 現在表示されている Teams メッセージを DOM から取得する
  * @returns {Object} { context, messages }
  */
+/**
+ * DM / グループチャット向け抽出
+ * chat-pane-item コンテナ + message-author-name セレクタを使用
+ */
+function extractDMMessages() {
+  const items = document.querySelectorAll(SELECTORS.dmChatItem);
+  if (items.length === 0) return null;
+
+  const context = getCurrentContext();
+  const messages = [];
+
+  items.forEach((item) => {
+    if (messages.length >= CONFIG.maxMessages) return;
+
+    const bodyEl = item.querySelector(SELECTORS.dmMessageBody);
+    if (!bodyEl) return; // メッセージ本文のないアイテム（日付区切り等）をスキップ
+
+    const senderEl = item.querySelector(SELECTORS.dmSenderName);
+    const timeEl = item.querySelector('[datetime]');
+
+    // messageId: "message-body-{timestamp}" → timestamp
+    const rawId = bodyEl.id || '';
+    const messageId = rawId.replace(/^message-body-/, '') || null;
+
+    const deepLink = buildMessageDeepLink(
+      messageId,
+      { threadId: context.threadId, groupId: context.groupId, tenantId: context.tenantId },
+      null
+    );
+
+    messages.push({
+      index: messages.length,
+      sender: senderEl?.textContent?.trim() || 'Unknown',
+      body: bodyEl.innerText?.trim() || '',
+      timestamp: timeEl?.getAttribute('datetime') || timeEl?.textContent?.trim() || '',
+      messageId,
+      url: deepLink,
+    });
+  });
+
+  if (messages.length === 0) return null;
+  return {
+    context,
+    messages,
+    extractedAt: new Date().toISOString(),
+    method: 'dm-chat-pane',
+  };
+}
+
 function extractMessages() {
   const messages = [];
 
-  // channel-pane-message の「外側」にある message-body を DM メッセージとして優先取得
-  // Teams SPA はチャンネル DOM をキャッシュするため、DM 表示中でも channel-pane-message が残る
-  // → 外側の message-body がある = DM が表示されている
-  const allBodies = document.querySelectorAll(SELECTORS.messageBody);
-  const dmBodies = Array.from(allBodies).filter(
-    el => !el.closest(SELECTORS.messageContainer)
-  );
-  if (dmBodies.length > 0) {
-    const dmResult = extractMessagesByBody(dmBodies);
-    if (dmResult && dmResult.messages.length > 0) return dmResult;
-  }
+  // DM / グループチャット向け: chat-pane-item コンテナを優先
+  // （Teams SPA がチャンネル DOM をキャッシュしていても chat-pane-item は DM 専用）
+  const dmResult = extractDMMessages();
+  if (dmResult) return dmResult;
 
-  // 新UI: channel-pane-message コンテナから取得（チャンネル用）
+  // チャンネル向け: channel-pane-message コンテナから取得
   const containers = document.querySelectorAll(SELECTORS.messageContainer);
 
   if (containers.length === 0) {
