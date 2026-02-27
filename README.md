@@ -24,8 +24,10 @@ Teams (browser)
 
 ## フロー
 
-1. **読み取り**: Teams のチャット画面を開く → Extension ポップアップで「メッセージを読み取る」→ MCP ツール `teams_read_messages()` で Claude Code が取得
+1. **読み取り**: Teams のチャンネル/チャット画面を開く → Extension が 15 秒ごとに自動でメッセージを取得・送信（手動操作不要）→ MCP ツール `teams_read_messages()` で Claude Code が取得
 2. **返信**: Claude Code が返信案を生成 → MCP ツール `teams_queue_reply(text)` → Extension が返信フォームに自動挿入 → ユーザーが送信ボタンを押す
+
+> ポップアップの「メッセージを読み取る」ボタンは手動での即時取得にも使用可能。
 
 ## セットアップ
 
@@ -53,11 +55,15 @@ Claude Code 起動時に MCP サーバーが自動起動する。
 
 ### 3. Teams を開く
 
-`https://teams.microsoft.com` を開き、読み取りたいチャネル/チャットを表示する。
+以下のいずれかを開き、読み取りたいチャネル/チャットを表示する:
+- `https://teams.microsoft.com`（旧 URL）
+- `https://teams.cloud.microsoft`（新 URL）
 
-### 4. Extension でメッセージ取得
+### 4. Extension がメッセージを自動取得
 
-ツールバーの Extension アイコンをクリック → 「メッセージを読み取る」
+ページ読み込みから 3 秒後に初回取得、以降 **15 秒ごとに自動プッシュ**。
+変更がなければ送信はスキップされる（無駄なトークン消費なし）。
+手動で即時取得したい場合はツールバーの Extension アイコン → 「メッセージを読み取る」。
 
 ### 5. Claude Code からアクセス
 
@@ -72,7 +78,7 @@ teams_get_status()             # 接続状態確認
 
 | ツール名 | 引数 | 説明 |
 |---------|------|------|
-| `teams_read_messages` | `limit?` (number) | 現在開いているチャンネル/チャットのメッセージ取得 |
+| `teams_read_messages` | `limit?` (number) | 現在開いているチャンネル/チャットのメッセージ取得（各メッセージに deep link URL 付き） |
 | `teams_queue_reply` | `text` (string) | 返信フォームにテキストを挿入（送信はユーザーが行う） |
 | `teams_get_status` | なし | MCP サーバー・Extension の接続状態確認 |
 
@@ -101,19 +107,22 @@ npx playwright test
 
 ## ロードマップ
 
-### Phase 1（現在）: PoC
+### Phase 1（完了）: PoC
 - [x] Content Script による Teams DOM 読み取り
 - [x] MCP サーバー（stdio）で Claude Code と接続
 - [x] Extension ポップアップ UI
 - [x] Playwright テスト（19件）
-- [x] Teams DOM セレクタの実機検証・調整（2026-02-27: teams.cloud.microsoft 新UI対応）
-- [ ] エンドツーエンドの動作確認（MCP経由でClaude Codeからメッセージ取得）
+- [x] Teams DOM セレクタの実機検証・調整（teams.cloud.microsoft 新UI対応）
+- [x] エンドツーエンドの動作確認（MCP経由で Claude Code からメッセージ取得）
+- [x] 15 秒ごとの自動プッシュ（ボタン操作不要）
+- [x] メッセージ deep link URL 取得（Teams メッセージへの直接リンク）
 
 ### Phase 2: 安定化
-- [ ] Extension → MCP サーバーへのリアルタイムプッシュ（ポーリング廃止）
+- [ ] チャット（DM/グループ）での送信者名取得（現在 Unknown）
+- [ ] ファイル添付・共有リンクの取得
 - [ ] 複数チャンネル・チャットの切り替え対応
 - [ ] メッセージのページネーション（スクロールで過去取得）
-- [ ] ファイル添付・リンクの取得
+- [ ] Extension → MCP サーバーへのリアルタイムプッシュ（ポーリング廃止）
 
 ### Phase 3: 拡張
 - [ ] SharePoint ドキュメントライブラリの読み取り
