@@ -132,6 +132,11 @@ inspectBtn.addEventListener('click', async () => {
           `  ${c.selector}: ${c.count}件 tag=${c.sampleTag}`
         ),
         '',
+        `--- DM id候補（上位15件） ---`,
+        ...(d.dmIdElements || []).map(e =>
+          `  [${e.tag}] id=${e.id} tid=${e.dataTid} parent=${e.parentDataTid} | ${e.textSample}`
+        ),
+        '',
         `--- フレーム情報 ---`,
         `  URL: ${d.summary.url || '不明'}`,
         `  frameType: ${d.summary.frameType || '不明'}`,

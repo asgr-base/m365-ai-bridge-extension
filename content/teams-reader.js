@@ -532,7 +532,20 @@ function inspectDom() {
     });
   }
 
-  // 7. iframeの検出
+  // 7. DM メッセージ候補（id*="message" / data-message-id の要素を調査）
+  const dmIdCandidates = document.querySelectorAll('[id*="message"]:not([data-tid="message-body"])');
+  results.dmIdElements = Array.from(dmIdCandidates)
+    .filter(el => el.textContent?.trim().length > 5)
+    .slice(0, 15)
+    .map(el => ({
+      id: el.id?.slice(0, 60),
+      tag: el.tagName,
+      dataTid: el.getAttribute('data-tid') || null,
+      parentDataTid: el.parentElement?.getAttribute('data-tid') || null,
+      textSample: el.textContent?.trim().slice(0, 60),
+    }));
+
+  // 8. iframeの検出
   const iframes = document.querySelectorAll('iframe');
   results.iframes = Array.from(iframes).map(f => ({
     src: f.src || '(no src)',
