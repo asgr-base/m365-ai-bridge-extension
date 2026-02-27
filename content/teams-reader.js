@@ -73,7 +73,10 @@ function extractMessages() {
   const containers = document.querySelectorAll(SELECTORS.messageContainer);
 
   if (containers.length === 0) {
-    // フォールバック: より広いセレクタで試みる
+    // 中間パス: message-body 要素から親を辿る（DM チャット向け）
+    const dmResult = extractMessagesByBody();
+    if (dmResult && dmResult.messages.length > 0) return dmResult;
+    // 最終フォールバック
     return extractMessagesFallback();
   }
 
@@ -126,6 +129,60 @@ function extractMessages() {
     messages,
     extractedAt: new Date().toISOString(),
     method: 'primary',
+  };
+}
+
+/**
+ * DM チャット向け: [data-tid="message-body"] から親を辿って送信者を探す
+ */
+function extractMessagesByBody() {
+  const messageBodies = document.querySelectorAll(SELECTORS.messageBody);
+  if (messageBodies.length === 0) return null;
+
+  const context = getCurrentContext();
+  const messages = [];
+
+  messageBodies.forEach((bodyEl, index) => {
+    if (index >= CONFIG.maxMessages) return;
+
+    // bodyEl から親を最大6階層辿り、span[id^="author-"] を探す
+    let senderEl = null;
+    let cur = bodyEl.parentElement;
+    for (let depth = 0; depth < 6 && cur; depth++) {
+      senderEl = cur.querySelector(SELECTORS.senderName);
+      if (senderEl) break;
+      cur = cur.parentElement;
+    }
+
+    // タイムスタンプ: 同じ親階層内で探す
+    const timeEl = cur?.querySelector(SELECTORS.timestamp) || null;
+
+    // messageId: bodyEl の id 属性から取得
+    const rawId = bodyEl.id || '';
+    const messageId = rawId.replace(/^message-body-/, '') || null;
+    const numericId = messageId?.replace(/^content-/, '') || messageId;
+
+    const deepLink = buildMessageDeepLink(
+      numericId,
+      { threadId: context.threadId, groupId: context.groupId, tenantId: context.tenantId },
+      context.channelName
+    );
+
+    messages.push({
+      index,
+      sender: senderEl?.textContent?.trim() || 'Unknown',
+      body: bodyEl.innerText?.trim() || '',
+      timestamp: timeEl?.getAttribute('datetime') || timeEl?.textContent?.trim() || '',
+      messageId,
+      url: deepLink,
+    });
+  });
+
+  return {
+    context,
+    messages,
+    extractedAt: new Date().toISOString(),
+    method: 'dm-body-traverse',
   };
 }
 
