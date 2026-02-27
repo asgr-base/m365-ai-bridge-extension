@@ -323,8 +323,18 @@ function inspectDom() {
     .slice(0, 50)
     .map(([tid, count]) => ({ tid, count }));
 
-  // 2. メッセージ候補を探す（よくあるパターン）
+  // 2. メッセージ候補を探す（チャンネル・チャット両対応）
   const msgPatterns = [
+    // チャンネル系
+    '[data-tid="channel-pane-message"]',
+    // チャット系（候補）
+    '[data-tid="chat-pane-message"]',
+    '[data-tid="chat-item"]',
+    '[data-tid="chat-message"]',
+    '[data-tid*="chat-pane"]',
+    '[data-tid*="chat-message"]',
+    '[data-tid*="chat-item"]',
+    // 汎用
     '[data-tid*="message"]',
     '[class*="message"]',
     '[class*="Message"]',

@@ -109,8 +109,8 @@ inspectBtn.addEventListener('click', async () => {
         `=== DOM 構造調査結果 ===`,
         `data-tid 要素数: ${d.summary.dataTidCount} (ユニーク: ${d.summary.uniqueTids})`,
         '',
-        `--- data-tid 上位20件 ---`,
-        ...(d.dataTidElements || []).slice(0, 20).map(e => `  ${e.tid}: ${e.count}件`),
+        `--- data-tid 上位50件 ---`,
+        ...(d.dataTidElements || []).slice(0, 50).map(e => `  ${e.tid}: ${e.count}件`),
         '',
         `--- メッセージ候補 ---`,
         ...d.messageCandidate.map(c =>
