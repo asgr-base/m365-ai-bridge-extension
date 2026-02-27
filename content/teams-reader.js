@@ -92,10 +92,12 @@ function extractMessages() {
     // メッセージ ID: bodyEl の id 属性から "message-body-{id}" パターンで取得
     const rawId = bodyEl?.id || container.id || '';
     const messageId = rawId.replace(/^message-body-/, '') || null;
+    // Deep link 用の数値 ID: "content-1770359698044" → "1770359698044"
+    const numericId = messageId?.replace(/^content-/, '') || messageId;
 
     // 深リンク URL を構築
     const deepLink = buildMessageDeepLink(
-      messageId,
+      numericId,
       { threadId: context.threadId, groupId: context.groupId, tenantId: context.tenantId },
       context.channelName
     );
