@@ -118,7 +118,7 @@ npx playwright test
 - [x] メッセージ deep link URL 取得（Teams メッセージへの直接リンク）
 
 ### Phase 2: 安定化
-- [ ] チャット（DM/グループ）での送信者名取得（現在 Unknown）
+- [x] チャット（DM/グループ）での送信者名取得（`chat-pane-item` / `message-author-name` セレクタ対応）
 - [ ] ファイル添付・共有リンクの取得
 - [ ] 複数チャンネル・チャットの切り替え対応
 - [ ] メッセージのページネーション（スクロールで過去取得）
