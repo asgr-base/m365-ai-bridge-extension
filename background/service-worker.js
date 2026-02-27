@@ -67,6 +67,23 @@ async function sendToTeams(command, payload = {}) {
     });
     return response;
   } catch (err) {
+    // Content Script が未注入の場合は動的に注入して再試行
+    if (err.message.includes('Could not establish connection')) {
+      log('log', 'Content Script 未検出 → 動的注入を試みます');
+      try {
+        await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          files: ['content/teams-reader.js'],
+        });
+        // 初期化完了まで待機
+        await new Promise(r => setTimeout(r, 800));
+        const response = await chrome.tabs.sendMessage(tab.id, { command, ...payload });
+        return response;
+      } catch (injectErr) {
+        log('error', '動的注入失敗:', injectErr.message);
+        return { success: false, error: `Content script injection failed: ${injectErr.message}` };
+      }
+    }
     log('error', 'Content script への送信失敗:', err.message);
     return { success: false, error: err.message };
   }

@@ -348,15 +348,28 @@ function inspectDom() {
     }
   });
 
-  // 3. 送信者名の候補
+  // 3. 送信者名の候補（チャット・チャンネル両対応）
   const senderPatterns = [
+    // チャンネル系
     '[data-tid*="author"]',
     '[data-tid*="sender"]',
     '[data-tid*="display-name"]',
+    'span[id^="author-"]',
+    // チャット系（Fluent UI / aria）
+    '[data-tid*="header"]',
+    '[data-tid*="name"]',
+    '[data-tid*="person"]',
+    'span[title]:not([aria-hidden="true"])',
+    'button[aria-label]',
+    '[class*="fui-Persona"]',
+    '[class*="fui-Text"]',
+    '[class*="fui-Avatar"]',
+    // 汎用
     '[class*="author"]',
     '[class*="sender"]',
     '[class*="displayName"]',
     '[class*="DisplayName"]',
+    '[class*="name"][class*="fui"]',
   ];
   senderPatterns.forEach(selector => {
     const els = document.querySelectorAll(selector);
