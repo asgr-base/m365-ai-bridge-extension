@@ -36,7 +36,12 @@ function log(level, ...args) {
  */
 async function getTeamsTab() {
   const tabs = await chrome.tabs.query({
-    url: ['https://teams.microsoft.com/*', 'https://*.teams.microsoft.com/*'],
+    url: [
+      'https://teams.microsoft.com/*',
+      'https://*.teams.microsoft.com/*',
+      'https://teams.cloud.microsoft/*',
+      'https://*.teams.cloud.microsoft/*',
+    ],
   });
   return tabs.length > 0 ? tabs[0] : null;
 }
@@ -92,6 +97,9 @@ async function handleRequest(request) {
 
     case 'PING_TEAMS':
       return await sendToTeams('PING');
+
+    case 'INSPECT_DOM':
+      return await sendToTeams('INSPECT_DOM');
 
     case 'GET_STATUS': {
       const tab = await getTeamsTab();

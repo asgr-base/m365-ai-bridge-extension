@@ -92,5 +92,65 @@ readBtn.addEventListener('click', async () => {
   }
 });
 
+// ========== DOM 構造調査 ==========
+
+const inspectBtn = document.getElementById('inspect-btn');
+
+inspectBtn.addEventListener('click', async () => {
+  inspectBtn.disabled = true;
+  inspectBtn.textContent = '調査中...';
+  showOutput('Teams の DOM 構造を調査中...', 'normal');
+
+  try {
+    const res = await chrome.runtime.sendMessage({ action: 'INSPECT_DOM' });
+    if (res?.success && res?.data) {
+      const d = res.data;
+      const lines = [
+        `=== DOM 構造調査結果 ===`,
+        `data-tid 要素数: ${d.summary.dataTidCount} (ユニーク: ${d.summary.uniqueTids})`,
+        '',
+        `--- メッセージ候補 ---`,
+        ...d.messageCandidate.map(c =>
+          `  ${c.selector}: ${c.count}件 classes=[${c.sampleClasses.join(', ')}]`
+        ),
+        '',
+        `--- 送信者候補 ---`,
+        ...d.senderCandidate.map(c =>
+          `  ${c.selector}: ${c.count}件 例=${c.samples.join(', ')}`
+        ),
+        '',
+        `--- タイムスタンプ候補 ---`,
+        ...d.timestampCandidate.map(c =>
+          `  ${c.selector}: ${c.count}件 例=${c.samples.map(s => s.text || s.datetime).join(', ')}`
+        ),
+        '',
+        `--- 返信ボックス候補 ---`,
+        ...d.replyBoxCandidate.map(c =>
+          `  ${c.selector}: ${c.count}件 tag=${c.sampleTag}`
+        ),
+      ];
+
+      showOutput(lines.join('\n'), 'success');
+
+      // ブリッジサーバーにも送信（起動していれば）
+      fetch(`${BRIDGE_URL}/dom-inspect`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(res.data),
+      }).catch(() => {});
+
+      // コンソールにも完全なデータを出力
+      console.log('[M365 AI Bridge] DOM調査結果:', JSON.stringify(res.data, null, 2));
+    } else {
+      showOutput(`エラー: ${res?.error || 'DOM調査失敗'}`, 'error');
+    }
+  } catch (err) {
+    showOutput(`例外: ${err.message}`, 'error');
+  } finally {
+    inspectBtn.disabled = false;
+    inspectBtn.textContent = 'DOM構造を調査';
+  }
+});
+
 // ========== 起動 ==========
 checkStatus();

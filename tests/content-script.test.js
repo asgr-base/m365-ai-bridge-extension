@@ -13,27 +13,27 @@ const MOCK_HTML = path.join(__dirname, 'mock/teams-mock.html');
 const CONTENT_SCRIPT = path.join(__dirname, '../content/teams-reader.js');
 
 // Content Script のコアロジックのみを抽出してテスト（chrome.runtime依存部分を除く）
+// セレクタは content/teams-reader.js と同期させること
 const extractorCode = `
   const SELECTORS = {
-    channelMessages: '[data-tid="message-body"]',
-    messageBody: '[data-tid="message-body-content"]',
-    senderName: '[data-tid="message-author-name"]',
-    timestamp: 'time[data-tid]',
-    channelName: '[data-tid="channel-name"]',
+    messageContainer: '[data-tid="channel-pane-message"]',
+    messageBody: '[data-tid="message-body"]',
+    senderName: 'span[id^="author-"]',
+    senderHeader: '[data-tid="post-message-subheader"], [data-tid="reply-message-header"]',
+    timestamp: '[data-tid="timestamp"]',
+    channelName: '[data-tid="channelTitle-text"]',
     chatTitle: '[data-tid="chat-title"]',
-    replyBox: '[data-tid="ckeditor"]',
+    replyBox: '[data-tid="ckeditor"], [role="textbox"][contenteditable="true"]',
   };
 
   function extractMessages() {
     const messages = [];
-    const msgElements = document.querySelectorAll(SELECTORS.channelMessages);
+    const containers = document.querySelectorAll(SELECTORS.messageContainer);
 
-    msgElements.forEach((el, index) => {
-      const bodyEl = el.querySelector(SELECTORS.messageBody) || el;
-      const senderEl = el.closest('[data-track-action-scenario]')
-        ?.querySelector(SELECTORS.senderName);
-      const timeEl = el.closest('[data-track-action-scenario]')
-        ?.querySelector(SELECTORS.timestamp);
+    containers.forEach((container, index) => {
+      const bodyEl = container.querySelector(SELECTORS.messageBody);
+      const senderEl = container.querySelector(SELECTORS.senderName);
+      const timeEl = container.querySelector(SELECTORS.timestamp);
 
       messages.push({
         index,
@@ -95,7 +95,7 @@ test.describe('Content Script DOM 読み取り', () => {
 
   test('メッセージが0件のページでは空配列を返す', async ({ page }) => {
     // 空のHTMLページ
-    await page.setContent('<html><body><div data-tid="channel-name">Empty</div></body></html>');
+    await page.setContent('<html><body><div data-tid="channelTitle-text">Empty</div></body></html>');
     await page.addScriptTag({ content: extractorCode });
 
     const result = await page.evaluate(() => window.__extractMessages());

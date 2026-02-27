@@ -21,23 +21,24 @@ const CONFIG = {
 
 // ========== Teams DOM セレクタ ==========
 // ※ Teams の UI 更新で壊れる可能性あり。定期的に検証が必要。
+// 最終検証: 2026-02-27 (teams.cloud.microsoft 新UI)
 const SELECTORS = {
-  // チャンネルメッセージ一覧
-  channelMessages: '[data-tid="message-body"]',
-  // チャットメッセージ一覧（1:1・グループチャット）
-  chatMessages: '[data-tid="chat-message"]',
-  // メッセージの本文
-  messageBody: '[data-tid="message-body-content"]',
-  // 送信者名
-  senderName: '[data-tid="message-author-name"]',
+  // 個別メッセージのコンテナ
+  messageContainer: '[data-tid="channel-pane-message"]',
+  // メッセージの本文（コンテナ内）
+  messageBody: '[data-tid="message-body"]',
+  // 送信者名（id="author-{messageId}" を持つ span）
+  senderName: 'span[id^="author-"]',
+  // 送信者ヘッダー領域
+  senderHeader: '[data-tid="post-message-subheader"], [data-tid="reply-message-header"]',
   // タイムスタンプ
-  timestamp: 'time[data-tid]',
+  timestamp: '[data-tid="timestamp"]',
   // 現在のチャンネル名
-  channelName: '[data-tid="channel-name"]',
+  channelName: '[data-tid="channelTitle-text"]',
   // 現在のチャット相手
   chatTitle: '[data-tid="chat-title"]',
   // 返信フォーム（メッセージ入力欄）
-  replyBox: '[data-tid="ckeditor"]',
+  replyBox: '[data-tid="ckeditor"], [role="textbox"][contenteditable="true"]',
   // 送信ボタン
   sendButton: '[data-tid="sendMessageCommands-send"]',
 };
@@ -68,29 +69,30 @@ function debounce(fn, ms) {
 function extractMessages() {
   const messages = [];
 
-  // チャンネルメッセージを探す
-  const msgElements = document.querySelectorAll(SELECTORS.channelMessages);
+  // 新UI: channel-pane-message コンテナから取得
+  const containers = document.querySelectorAll(SELECTORS.messageContainer);
 
-  if (msgElements.length === 0) {
+  if (containers.length === 0) {
     // フォールバック: より広いセレクタで試みる
     return extractMessagesFallback();
   }
 
-  msgElements.forEach((el, index) => {
+  containers.forEach((container, index) => {
     if (index >= CONFIG.maxMessages) return;
 
-    const bodyEl = el.querySelector(SELECTORS.messageBody) || el;
-    const senderEl = el.closest('[data-track-action-scenario]')
-      ?.querySelector(SELECTORS.senderName);
-    const timeEl = el.closest('[data-track-action-scenario]')
-      ?.querySelector(SELECTORS.timestamp);
+    // メッセージ本文
+    const bodyEl = container.querySelector(SELECTORS.messageBody);
+    // 送信者名: span[id^="author-"] 内のテキスト
+    const senderEl = container.querySelector(SELECTORS.senderName);
+    // タイムスタンプ
+    const timeEl = container.querySelector(SELECTORS.timestamp);
 
     messages.push({
       index,
       sender: senderEl?.textContent?.trim() || 'Unknown',
       body: bodyEl?.innerText?.trim() || '',
       timestamp: timeEl?.getAttribute('datetime') || timeEl?.textContent?.trim() || '',
-      elementId: el.id || null,
+      elementId: container.id || bodyEl?.id || null,
     });
   });
 
@@ -182,6 +184,156 @@ function insertReply(text) {
   return true;
 }
 
+// ========== DOM 構造調査 ==========
+
+/**
+ * Teams の DOM 構造を調査し、セレクタ調整に必要な情報を返す。
+ * メッセージ要素の HTML スニペット、data-* 属性、クラス名を収集する。
+ */
+function inspectDom() {
+  const results = {
+    summary: {},
+    dataTidElements: [],
+    messageCandidate: [],
+    senderCandidate: [],
+    timestampCandidate: [],
+    replyBoxCandidate: [],
+    sampleHtml: [],
+  };
+
+  // 1. data-tid 属性を持つ全要素を収集
+  const tidElements = document.querySelectorAll('[data-tid]');
+  const tidMap = {};
+  tidElements.forEach(el => {
+    const tid = el.getAttribute('data-tid');
+    tidMap[tid] = (tidMap[tid] || 0) + 1;
+  });
+  results.dataTidElements = Object.entries(tidMap)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 50)
+    .map(([tid, count]) => ({ tid, count }));
+
+  // 2. メッセージ候補を探す（よくあるパターン）
+  const msgPatterns = [
+    '[data-tid*="message"]',
+    '[class*="message"]',
+    '[class*="Message"]',
+    '[data-message-id]',
+    '[role="listitem"]',
+    '[class*="chat-item"]',
+    '[class*="ChatItem"]',
+  ];
+  msgPatterns.forEach(selector => {
+    const els = document.querySelectorAll(selector);
+    if (els.length > 0) {
+      results.messageCandidate.push({
+        selector,
+        count: els.length,
+        sampleClasses: els[0].className?.split(' ').slice(0, 5) || [],
+        sampleDataAttrs: Array.from(els[0].attributes)
+          .filter(a => a.name.startsWith('data-'))
+          .map(a => `${a.name}="${a.value}"`)
+          .slice(0, 5),
+      });
+    }
+  });
+
+  // 3. 送信者名の候補
+  const senderPatterns = [
+    '[data-tid*="author"]',
+    '[data-tid*="sender"]',
+    '[data-tid*="display-name"]',
+    '[class*="author"]',
+    '[class*="sender"]',
+    '[class*="displayName"]',
+    '[class*="DisplayName"]',
+  ];
+  senderPatterns.forEach(selector => {
+    const els = document.querySelectorAll(selector);
+    if (els.length > 0) {
+      results.senderCandidate.push({
+        selector,
+        count: els.length,
+        samples: Array.from(els).slice(0, 3).map(e => e.textContent?.trim().slice(0, 30)),
+      });
+    }
+  });
+
+  // 4. タイムスタンプの候補
+  const timePatterns = [
+    'time',
+    '[data-tid*="time"]',
+    '[data-tid*="timestamp"]',
+    '[class*="timestamp"]',
+    '[class*="Timestamp"]',
+    '[class*="time"]',
+    '[datetime]',
+  ];
+  timePatterns.forEach(selector => {
+    const els = document.querySelectorAll(selector);
+    if (els.length > 0) {
+      results.timestampCandidate.push({
+        selector,
+        count: els.length,
+        samples: Array.from(els).slice(0, 3).map(e => ({
+          text: e.textContent?.trim().slice(0, 30),
+          datetime: e.getAttribute('datetime') || null,
+        })),
+      });
+    }
+  });
+
+  // 5. 返信ボックスの候補
+  const replyPatterns = [
+    '[contenteditable="true"]',
+    '[data-tid*="ckeditor"]',
+    '[data-tid*="editor"]',
+    '[role="textbox"]',
+    '[class*="editor"]',
+    '[class*="Editor"]',
+  ];
+  replyPatterns.forEach(selector => {
+    const els = document.querySelectorAll(selector);
+    if (els.length > 0) {
+      results.replyBoxCandidate.push({
+        selector,
+        count: els.length,
+        sampleTag: els[0].tagName,
+        sampleClasses: els[0].className?.split(' ').slice(0, 5) || [],
+      });
+    }
+  });
+
+  // 6. メッセージらしき要素の HTML サンプル（最初の2件）
+  // 最も有望なメッセージ候補の outerHTML を取得
+  const bestMsgSelector = results.messageCandidate
+    .sort((a, b) => b.count - a.count)[0]?.selector;
+  if (bestMsgSelector) {
+    const sampleEls = document.querySelectorAll(bestMsgSelector);
+    Array.from(sampleEls).slice(0, 2).forEach((el, i) => {
+      // 巨大になりすぎないようHTMLを切り詰め
+      let html = el.outerHTML;
+      if (html.length > 2000) html = html.slice(0, 2000) + '... [truncated]';
+      results.sampleHtml.push({
+        index: i,
+        selector: bestMsgSelector,
+        htmlLength: el.outerHTML.length,
+        html,
+      });
+    });
+  }
+
+  results.summary = {
+    dataTidCount: tidElements.length,
+    uniqueTids: Object.keys(tidMap).length,
+    messageCandidates: results.messageCandidate.length,
+    senderCandidates: results.senderCandidate.length,
+    url: window.location.href,
+  };
+
+  return results;
+}
+
 // ========== ブリッジサーバー通信 ==========
 
 /**
@@ -232,6 +384,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     case 'INSERT_REPLY': {
       const success = insertReply(request.text);
       sendResponse({ success });
+      break;
+    }
+
+    case 'INSPECT_DOM': {
+      const result = inspectDom();
+      log('log', 'DOM構造調査完了:', result.summary);
+      sendResponse({ success: true, data: result });
       break;
     }
 

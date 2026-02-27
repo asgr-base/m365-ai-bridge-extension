@@ -5,33 +5,42 @@
   <title>Teams Mock - General</title>
 </head>
 <body>
-  <!-- Teams チャンネル名 -->
-  <div data-tid="channel-name">General</div>
+  <!-- Teams チャンネル名（新UI: channelTitle-text） -->
+  <div data-tid="channelTitle-text">General</div>
 
-  <!-- メッセージ一覧（Teams の実際の DOM 構造を模倣） -->
+  <!-- メッセージ一覧（新 Teams UI の DOM 構造を模倣） -->
   <div class="message-list">
 
-    <div data-track-action-scenario="message-1">
-      <div data-tid="message-author-name">田中 太郎</div>
-      <time data-tid="message-timestamp" datetime="2026-02-26T09:00:00Z">09:00</time>
-      <div data-tid="message-body">
-        <div data-tid="message-body-content">おはようございます。今日のスプリントレビューの準備できていますか？</div>
+    <div data-tid="channel-pane-message" id="msg-1770001">
+      <div data-tid="post-message-subheader">
+        <div data-tid="post-message-header-avatar"></div>
+        <span id="author-1770001" class="fui-StyledText">田中 太郎</span>
+      </div>
+      <div data-tid="timestamp" datetime="2026-02-26T09:00:00Z">09:00</div>
+      <div id="message-body-1770001" data-tid="message-body">
+        おはようございます。今日のスプリントレビューの準備できていますか？
       </div>
     </div>
 
-    <div data-track-action-scenario="message-2">
-      <div data-tid="message-author-name">山田 花子</div>
-      <time data-tid="message-timestamp" datetime="2026-02-26T09:05:00Z">09:05</time>
-      <div data-tid="message-body">
-        <div data-tid="message-body-content">はい、資料は昨日完成しました。共有します。</div>
+    <div data-tid="channel-pane-message" id="msg-1770002">
+      <div data-tid="post-message-subheader">
+        <div data-tid="post-message-header-avatar"></div>
+        <span id="author-1770002" class="fui-StyledText">山田 花子</span>
+      </div>
+      <div data-tid="timestamp" datetime="2026-02-26T09:05:00Z">09:05</div>
+      <div id="message-body-1770002" data-tid="message-body">
+        はい、資料は昨日完成しました。共有します。
       </div>
     </div>
 
-    <div data-track-action-scenario="message-3">
-      <div data-tid="message-author-name">都甲 篤史</div>
-      <time data-tid="message-timestamp" datetime="2026-02-26T09:10:00Z">09:10</time>
-      <div data-tid="message-body">
-        <div data-tid="message-body-content">ありがとうございます。13時から会議室Bで開始します。</div>
+    <div data-tid="channel-pane-message" id="msg-1770003">
+      <div data-tid="reply-message-header">
+        <div data-tid="post-message-header-avatar"></div>
+        <span id="author-1770003" class="fui-StyledText">都甲 篤史</span>
+      </div>
+      <div data-tid="timestamp" datetime="2026-02-26T09:10:00Z">09:10</div>
+      <div id="message-body-1770003" data-tid="message-body">
+        ありがとうございます。13時から会議室Bで開始します。
       </div>
     </div>
 

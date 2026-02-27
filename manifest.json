@@ -11,6 +11,8 @@
   "host_permissions": [
     "https://teams.microsoft.com/*",
     "https://*.teams.microsoft.com/*",
+    "https://teams.cloud.microsoft/*",
+    "https://*.teams.cloud.microsoft/*",
     "http://localhost:*/"
   ],
   "background": {
@@ -20,7 +22,9 @@
     {
       "matches": [
         "https://teams.microsoft.com/*",
-        "https://*.teams.microsoft.com/*"
+        "https://*.teams.microsoft.com/*",
+        "https://teams.cloud.microsoft/*",
+        "https://*.teams.cloud.microsoft/*"
       ],
       "js": ["content/teams-reader.js"],
       "run_at": "document_idle"
