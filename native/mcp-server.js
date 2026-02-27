@@ -102,20 +102,31 @@ function startHttpServer() {
     }
   });
 
-  server.listen(HTTP_PORT, '127.0.0.1', () => {
-    // MCP stdio モードでは stdout をプロトコル通信に使うため、
-    // サーバーログは stderr に出力する
-    process.stderr.write(`[M365 AI Bridge] HTTP server listening on localhost:${HTTP_PORT}\n`);
-  });
+  let retryCount = 0;
+  const MAX_RETRIES = 10;
+  const RETRY_INTERVAL_MS = 3000;
+
+  function tryListen() {
+    server.listen(HTTP_PORT, '127.0.0.1', () => {
+      process.stderr.write(`[M365 AI Bridge] HTTP server listening on localhost:${HTTP_PORT}\n`);
+    });
+  }
 
   server.on('error', (err) => {
-    if (err.code === 'EADDRINUSE') {
-      process.stderr.write(`[M365 AI Bridge] Port ${HTTP_PORT} already in use.\n`);
+    if (err.code === 'EADDRINUSE' && retryCount < MAX_RETRIES) {
+      retryCount++;
+      process.stderr.write(
+        `[M365 AI Bridge] Port ${HTTP_PORT} in use, retry ${retryCount}/${MAX_RETRIES} in ${RETRY_INTERVAL_MS / 1000}s...\n`
+      );
+      setTimeout(tryListen, RETRY_INTERVAL_MS);
+    } else if (err.code === 'EADDRINUSE') {
+      process.stderr.write(`[M365 AI Bridge] Port ${HTTP_PORT} still in use after ${MAX_RETRIES} retries. HTTP server disabled.\n`);
     } else {
       process.stderr.write(`[M365 AI Bridge] HTTP error: ${err.message}\n`);
     }
   });
 
+  tryListen();
   return server;
 }
 
