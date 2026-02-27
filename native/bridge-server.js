@@ -19,7 +19,7 @@
 'use strict';
 
 const http = require('http');
-const PORT = 3765;
+const PORT = parseInt(process.env.BRIDGE_PORT, 10) || 3765;
 
 // ========== インメモリストア ==========
 let messageBuffer = null;      // Extension から受信した最新メッセージ

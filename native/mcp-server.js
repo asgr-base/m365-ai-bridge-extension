@@ -247,8 +247,41 @@ async function startMcpServer() {
   process.stderr.write('[M365 AI Bridge] MCP server connected via stdio\n');
 }
 
+// ========== 起動時クリーンアップ ==========
+
+/**
+ * port 3765 を保持しているプロセスを終了する。
+ * セッション再起動で古いプロセスが port を占有する問題を防止。
+ */
+function killPortHolder() {
+  try {
+    const { execSync } = require('child_process');
+    const myPid = process.pid;
+    // lsof で port を保持している PID を特定
+    const output = execSync(
+      `lsof -ti :${HTTP_PORT} 2>/dev/null || true`,
+      { encoding: 'utf-8' }
+    ).trim();
+
+    if (!output) return;
+
+    const pids = output.split('\n').map(Number).filter(pid => pid && pid !== myPid);
+    for (const pid of pids) {
+      try {
+        process.kill(pid, 'SIGTERM');
+        process.stderr.write(`[M365 AI Bridge] Killed port holder PID ${pid} on port ${HTTP_PORT}\n`);
+      } catch {
+        // プロセスが既に終了している場合は無視
+      }
+    }
+  } catch {
+    // lsof が使えない環境では無視
+  }
+}
+
 // ========== 起動 ==========
 
+killPortHolder();
 startHttpServer();
 startMcpServer().catch((err) => {
   process.stderr.write(`[M365 AI Bridge] MCP startup error: ${err.message}\n`);

@@ -9,15 +9,17 @@ const { test, expect } = require('@playwright/test');
 const { spawn } = require('child_process');
 const path = require('path');
 
-const BRIDGE_URL = 'http://localhost:3765';
+const TEST_PORT = 3766;
+const BRIDGE_URL = `http://localhost:${TEST_PORT}`;
 const SERVER_PATH = path.join(__dirname, '../native/bridge-server.js');
 
 let serverProcess;
 
 test.beforeAll(async () => {
-  // ブリッジサーバーをサブプロセスで起動
+  // ブリッジサーバーをサブプロセスで起動（テスト用ポートを使用）
   serverProcess = spawn('node', [SERVER_PATH], {
     stdio: ['ignore', 'pipe', 'pipe'],
+    env: { ...process.env, BRIDGE_PORT: String(TEST_PORT) },
   });
 
   // 起動待ち（最大3秒）
