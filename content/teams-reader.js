@@ -408,20 +408,40 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   return true;
 });
 
+// ========== 自動プッシュ ==========
+
+let lastPushHash = '';
+
+/**
+ * メッセージを抽出してブリッジサーバーへ自動送信する。
+ * 前回送信時と内容が変わった場合のみ送信する。
+ */
+async function autoPush() {
+  const result = extractMessages();
+  // メッセージ件数 + 先頭/末尾の本文でハッシュを簡易生成
+  const msgs = result.messages;
+  const hash = `${msgs.length}:${msgs[0]?.body?.slice(0, 30) || ''}:${msgs[msgs.length - 1]?.body?.slice(0, 30) || ''}`;
+
+  if (hash === lastPushHash) return; // 変更なし → スキップ
+
+  lastPushHash = hash;
+  const res = await sendToBridge('/messages', result);
+  if (res) {
+    log('log', `自動プッシュ: ${msgs.length}件送信`);
+  }
+}
+
 // ========== 初期化 ==========
 
 log('log', 'Teams コンテンツスクリプト起動 (Phase 1 PoC)');
 log('log', 'URL:', window.location.href);
 
-// ページ読み込み完了後に初回取得を試みる
+// ページ読み込み完了後に初回取得 + 定期プッシュ開始
 window.addEventListener('load', () => {
+  // 初回: DOM が安定するまで少し待つ
   setTimeout(() => {
-    const result = extractMessages();
-    log('log', '初回メッセージ取得:', result);
-
-    // ブリッジサーバーへの接続試行（未起動でも問題なし）
-    sendToBridge('/messages', result).then((res) => {
-      if (res) log('log', 'ブリッジサーバーへ送信成功:', res);
-    });
-  }, 2000);
+    autoPush();
+    // 15秒ごとに自動プッシュ（変更がなければスキップ）
+    setInterval(autoPush, 15000);
+  }, 3000);
 });
