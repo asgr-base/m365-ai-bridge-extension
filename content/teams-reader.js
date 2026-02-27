@@ -84,10 +84,19 @@ function extractMessages() {
 
     // メッセージ本文
     const bodyEl = container.querySelector(SELECTORS.messageBody);
-    // 送信者名: span[id^="author-"] 内のテキスト
-    const senderEl = container.querySelector(SELECTORS.senderName);
     // タイムスタンプ
     const timeEl = container.querySelector(SELECTORS.timestamp);
+
+    // 送信者名: 複数パターンを順次試みる（チャンネル・DM両対応）
+    const senderEl = container.querySelector(SELECTORS.senderName)       // span[id^="author-"]  チャンネル用
+      || container.querySelector('[data-tid="author-name"]')             // DM 新UI候補
+      || container.querySelector('[data-tid*="author"]')                 // author を含む data-tid
+      || container.querySelector('[class*="author-name"]')               // クラス名ベース
+      || container.querySelector('[class*="displayName"]');              // Fluent UI displayName
+    // アバターボタンの aria-label からフォールバック（DM で名前が button に入る場合）
+    const avatarAriaLabel = !senderEl
+      ? container.querySelector('button[aria-label]:not([aria-label=""])')?.getAttribute('aria-label')
+      : null;
 
     // メッセージ ID: bodyEl の id 属性から "message-body-{id}" パターンで取得
     const rawId = bodyEl?.id || container.id || '';
@@ -104,7 +113,7 @@ function extractMessages() {
 
     messages.push({
       index,
-      sender: senderEl?.textContent?.trim() || 'Unknown',
+      sender: senderEl?.textContent?.trim() || avatarAriaLabel || 'Unknown',
       body: bodyEl?.innerText?.trim() || '',
       timestamp: timeEl?.getAttribute('datetime') || timeEl?.textContent?.trim() || '',
       messageId,

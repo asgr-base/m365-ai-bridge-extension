@@ -133,6 +133,7 @@ inspectBtn.addEventListener('click', async () => {
         ),
         '',
         `--- フレーム情報 ---`,
+        `  URL: ${d.summary.url || '不明'}`,
         `  frameType: ${d.summary.frameType || '不明'}`,
         `  iframes: ${d.summary.iframeCount ?? '?'}件`,
         ...(d.iframes || []).slice(0, 10).map(f =>
