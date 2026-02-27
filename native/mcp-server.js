@@ -171,10 +171,12 @@ async function startMcpServer() {
         `- チャンネル/チャット: ${ctx.channelName || ctx.chatTitle || ctx.pageTitle}`,
         `- 取得日時: ${messageBufferAt}`,
         `- 件数: ${messages.length}件`,
+        ctx.threadId ? `- threadId: ${ctx.threadId}` : '- threadId: (未取得)',
         '',
-        ...messages.map(m =>
-          `**[${m.index + 1}] ${m.sender}** (${m.timestamp || '不明'})\n${m.body}`
-        ),
+        ...messages.map(m => {
+          const urlLine = m.url ? `\n[メッセージへのリンク](${m.url})` : '';
+          return `**[${m.index + 1}] ${m.sender}** (${m.timestamp || '不明'})${urlLine}\n${m.body}`;
+        }),
       ];
 
       return {

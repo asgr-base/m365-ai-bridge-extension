@@ -77,6 +77,8 @@ function extractMessages() {
     return extractMessagesFallback();
   }
 
+  const context = getCurrentContext();
+
   containers.forEach((container, index) => {
     if (index >= CONFIG.maxMessages) return;
 
@@ -87,17 +89,29 @@ function extractMessages() {
     // タイムスタンプ
     const timeEl = container.querySelector(SELECTORS.timestamp);
 
+    // メッセージ ID: bodyEl の id 属性から "message-body-{id}" パターンで取得
+    const rawId = bodyEl?.id || container.id || '';
+    const messageId = rawId.replace(/^message-body-/, '') || null;
+
+    // 深リンク URL を構築
+    const deepLink = buildMessageDeepLink(
+      messageId,
+      { threadId: context.threadId, groupId: context.groupId, tenantId: context.tenantId },
+      context.channelName
+    );
+
     messages.push({
       index,
       sender: senderEl?.textContent?.trim() || 'Unknown',
       body: bodyEl?.innerText?.trim() || '',
       timestamp: timeEl?.getAttribute('datetime') || timeEl?.textContent?.trim() || '',
-      elementId: container.id || bodyEl?.id || null,
+      messageId,
+      url: deepLink,
     });
   });
 
   return {
-    context: getCurrentContext(),
+    context,
     messages,
     extractedAt: new Date().toISOString(),
     method: 'primary',
@@ -144,14 +158,108 @@ function extractMessagesFallback() {
 }
 
 /**
+ * Teams のスレッドコンテキスト（threadId, groupId, tenantId）を DOM/URL から抽出する。
+ * 複数のソースを試み、最初に見つかった値を返す。
+ */
+function extractTeamsThreadContext() {
+  const ctx = { threadId: null, groupId: null, tenantId: null };
+
+  // 1. URL ハッシュ・パラメータから取得
+  //    例: https://teams.cloud.microsoft/v2/#/l/channel/19:xxx@thread.tacv2/General?groupId=yyy&tenantId=zzz
+  try {
+    const url = new URL(window.location.href);
+
+    // クエリパラメータ
+    ctx.groupId = ctx.groupId || url.searchParams.get('groupId');
+    ctx.tenantId = ctx.tenantId || url.searchParams.get('tenantId');
+
+    // ハッシュ内のパス部分をパースして threadId を探す
+    const hashPath = url.hash.replace(/^#\/?/, '');
+    const threadMatch = hashPath.match(/19:[a-zA-Z0-9._%-]+@thread\.[a-zA-Z0-9]+/);
+    if (threadMatch) ctx.threadId = decodeURIComponent(threadMatch[0]);
+
+    // ハッシュ内のクエリパラメータも試みる
+    const hashQueryIdx = url.hash.indexOf('?');
+    if (hashQueryIdx !== -1) {
+      const hashQuery = new URLSearchParams(url.hash.slice(hashQueryIdx + 1));
+      ctx.groupId = ctx.groupId || hashQuery.get('groupId');
+      ctx.tenantId = ctx.tenantId || hashQuery.get('tenantId');
+    }
+  } catch {
+    // URL パース失敗は無視
+  }
+
+  // 2. DOM の <a> href から `19:xxx@thread.xxx` を検索
+  if (!ctx.threadId) {
+    const links = document.querySelectorAll('a[href*="thread"]');
+    for (const link of links) {
+      const m = link.href.match(/19:[a-zA-Z0-9._%-]+@thread\.[a-zA-Z0-9]+/);
+      if (m) { ctx.threadId = decodeURIComponent(m[0]); break; }
+    }
+  }
+
+  // 3. DOM の data 属性から取得を試みる
+  if (!ctx.threadId) {
+    const el = document.querySelector('[data-threadid], [data-thread-id], [data-channel-id]');
+    ctx.threadId = ctx.threadId
+      || el?.dataset?.threadid
+      || el?.dataset?.threadId
+      || el?.dataset?.channelId
+      || null;
+  }
+
+  // 4. ページ内スクリプトタグの JSON から groupId / tenantId を探す（Teams の埋め込み設定）
+  if (!ctx.groupId || !ctx.tenantId) {
+    const scripts = document.querySelectorAll('script:not([src])');
+    for (const s of scripts) {
+      const text = s.textContent;
+      if (!text || text.length > 50000) continue;
+      if (!ctx.groupId) {
+        const m = text.match(/"groupId"\s*:\s*"([0-9a-f-]{36})"/i);
+        if (m) ctx.groupId = m[1];
+      }
+      if (!ctx.tenantId) {
+        const m = text.match(/"tenantId"\s*:\s*"([0-9a-f-]{36})"/i);
+        if (m) ctx.tenantId = m[1];
+      }
+      if (ctx.groupId && ctx.tenantId) break;
+    }
+  }
+
+  return ctx;
+}
+
+/**
+ * Teams メッセージの深リンク URL を構築する。
+ * threadId と messageId が取得できた場合のみ URL を返す。
+ */
+function buildMessageDeepLink(messageId, threadCtx, channelName) {
+  const { threadId, groupId, tenantId } = threadCtx;
+  if (!threadId || !messageId) return null;
+
+  const params = new URLSearchParams();
+  if (tenantId) params.set('tenantId', tenantId);
+  if (groupId) params.set('groupId', groupId);
+  params.set('parentMessageId', messageId);
+  if (channelName) params.set('channelName', channelName);
+  params.set('createdTime', messageId);
+
+  return `https://teams.microsoft.com/l/message/${encodeURIComponent(threadId)}/${messageId}?${params}`;
+}
+
+/**
  * 現在開いているチャンネル・チャットのコンテキスト情報を取得
  */
 function getCurrentContext() {
+  const threadCtx = extractTeamsThreadContext();
   return {
     url: window.location.href,
     channelName: document.querySelector(SELECTORS.channelName)?.textContent?.trim() || null,
     chatTitle: document.querySelector(SELECTORS.chatTitle)?.textContent?.trim() || null,
     pageTitle: document.title,
+    threadId: threadCtx.threadId,
+    groupId: threadCtx.groupId,
+    tenantId: threadCtx.tenantId,
   };
 }
 
