@@ -137,6 +137,11 @@ inspectBtn.addEventListener('click', async () => {
           `  ${c.selector}: ${c.count}件\n` +
           c.samples.map(s => `    href=${(s.href || '').slice(0, 60)} | ${s.text?.slice(0, 50) || ''}`).join('\n')
         ),
+        ...(d.fileSampleHtml || []).flatMap(f => [
+          `  --- file HTML sample (${f.htmlLength}B) ---`,
+          ...(f.links || []).map(l => `    <a> href=${(l.href || '').slice(0, 80)} | ${l.text || ''}`),
+          `    data-attrs: ${JSON.stringify(f.dataAttrs || {}).slice(0, 150)}`,
+        ]),
         '',
         `--- DM id候補（上位15件） ---`,
         ...(d.dmIdElements || []).map(e =>

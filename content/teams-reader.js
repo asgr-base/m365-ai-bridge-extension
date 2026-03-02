@@ -438,6 +438,10 @@ function inspectDom() {
     timestampCandidate: [],
     replyBoxCandidate: [],
     sampleHtml: [],
+    fileCandidate: [],
+    fileSampleHtml: [],
+    dmIdElements: [],
+    iframes: [],
   };
 
   // 1. data-tid 属性を持つ全要素を収集
@@ -632,7 +636,31 @@ function inspectDom() {
     } catch { /* invalid selector */ }
   });
 
-  // 9. iframeの検出
+  // 9. ファイル添付の HTML サンプル（最初の1件の詳細構造）
+  const fileRoots = document.querySelectorAll('[data-tid="file-preview-root"]');
+  results.fileSampleHtml = [];
+  if (fileRoots.length > 0) {
+    const el = fileRoots[0];
+    let html = el.outerHTML;
+    if (html.length > 3000) html = html.slice(0, 3000) + '... [truncated]';
+    const links = el.querySelectorAll('a');
+    results.fileSampleHtml.push({
+      htmlLength: el.outerHTML.length,
+      html,
+      links: Array.from(links).map(a => ({
+        href: a.href,
+        text: a.textContent?.trim().slice(0, 60),
+        ariaLabel: a.getAttribute('aria-label')?.slice(0, 60),
+      })),
+      dataAttrs: Object.fromEntries(
+        Array.from(el.attributes)
+          .filter(a => a.name.startsWith('data-'))
+          .map(a => [a.name, a.value.slice(0, 100)])
+      ),
+    });
+  }
+
+  // 10. iframeの検出
   const iframes = document.querySelectorAll('iframe');
   results.iframes = Array.from(iframes).map(f => ({
     src: f.src || '(no src)',
