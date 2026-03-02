@@ -137,10 +137,13 @@ inspectBtn.addEventListener('click', async () => {
           `  ${c.selector}: ${c.count}件\n` +
           c.samples.map(s => `    href=${(s.href || '').slice(0, 60)} | ${s.text?.slice(0, 50) || ''}`).join('\n')
         ),
-        ...(d.fileSampleHtml || []).flatMap(f => [
-          `  --- file HTML sample (${f.htmlLength}B) ---`,
-          ...(f.links || []).map(l => `    <a> href=${(l.href || '').slice(0, 80)} | ${l.text || ''}`),
-          `    data-attrs: ${JSON.stringify(f.dataAttrs || {}).slice(0, 150)}`,
+        ...(d.fileDetail || []).flatMap((f, i) => [
+          `  --- file[${i}]: ${f.text?.slice(0, 50) || '?'} ---`,
+          `    aria: ${f.ariaLabel || 'null'} role: ${f.role || 'null'}`,
+          ...(f.imgs || []).map(im => `    img src=${im.src?.slice(0, 80)} alt=${im.alt}`),
+          ...(f.buttons || []).map(b => `    btn aria=${b.ariaLabel} | ${b.text}`),
+          ...(f.urlElements || []).map(u => `    [${u.tag}] href=${u.href} url=${u.dataUrl} src=${u.src}`),
+          f.urlElements?.length === 0 ? '    (URLを持つ子要素なし)' : '',
         ]),
         '',
         `--- DM id候補（上位15件） ---`,

@@ -636,29 +636,38 @@ function inspectDom() {
     } catch { /* invalid selector */ }
   });
 
-  // 9. ファイル添付の HTML サンプル（最初の1件の詳細構造）
+  // 9. ファイル添付の詳細構造（最大3件）
   const fileRoots = document.querySelectorAll('[data-tid="file-preview-root"]');
-  results.fileSampleHtml = [];
-  if (fileRoots.length > 0) {
-    const el = fileRoots[0];
-    let html = el.outerHTML;
-    if (html.length > 3000) html = html.slice(0, 3000) + '... [truncated]';
-    const links = el.querySelectorAll('a');
-    results.fileSampleHtml.push({
-      htmlLength: el.outerHTML.length,
-      html,
-      links: Array.from(links).map(a => ({
-        href: a.href,
-        text: a.textContent?.trim().slice(0, 60),
-        ariaLabel: a.getAttribute('aria-label')?.slice(0, 60),
+  results.fileDetail = Array.from(fileRoots).slice(0, 3).map(root => {
+    const imgs = root.querySelectorAll('img');
+    const buttons = root.querySelectorAll('button');
+    // href / data-url / src を持つ全要素
+    const allChildren = root.querySelectorAll('*');
+    const urlEls = Array.from(allChildren).filter(el =>
+      el.getAttribute('href') || el.getAttribute('data-url') ||
+      el.getAttribute('data-href') || el.getAttribute('data-src') ||
+      (el.tagName === 'IMG' && el.src)
+    );
+    return {
+      text: root.textContent?.trim().slice(0, 80),
+      ariaLabel: root.getAttribute('aria-label')?.slice(0, 80),
+      role: root.getAttribute('role'),
+      imgs: Array.from(imgs).map(img => ({
+        src: img.src?.slice(0, 150),
+        alt: img.alt?.slice(0, 60),
       })),
-      dataAttrs: Object.fromEntries(
-        Array.from(el.attributes)
-          .filter(a => a.name.startsWith('data-'))
-          .map(a => [a.name, a.value.slice(0, 100)])
-      ),
-    });
-  }
+      buttons: Array.from(buttons).slice(0, 3).map(btn => ({
+        ariaLabel: btn.getAttribute('aria-label')?.slice(0, 80),
+        text: btn.textContent?.trim().slice(0, 40),
+      })),
+      urlElements: urlEls.slice(0, 5).map(el => ({
+        tag: el.tagName,
+        href: (el.getAttribute('href') || '')?.slice(0, 150),
+        dataUrl: (el.getAttribute('data-url') || '')?.slice(0, 150),
+        src: (el.getAttribute('src') || '')?.slice(0, 150),
+      })),
+    };
+  });
 
   // 10. iframeの検出
   const iframes = document.querySelectorAll('iframe');
