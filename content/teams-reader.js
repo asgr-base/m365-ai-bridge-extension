@@ -598,7 +598,41 @@ function inspectDom() {
       textSample: el.textContent?.trim().slice(0, 60),
     }));
 
-  // 8. iframeの検出
+  // 8. ファイル添付候補の調査
+  const filePatterns = [
+    '[data-tid="file-preview-root"]',
+    '[data-tid="file-attachment-grid"]',
+    '[data-tid*="file-preview"]',
+    '[data-tid*="file-attachment"]',
+    '[data-tid*="file-card"]',
+    'a[href*="sharepoint.com"]',
+    'a[href*="1drv.ms"]',
+    'a[href*=".sharepoint.com"]',
+    '[class*="file-preview"]',
+    '[class*="FileCard"]',
+    '[class*="AttachmentCard"]',
+  ];
+  results.fileCandidate = [];
+  filePatterns.forEach(selector => {
+    try {
+      const els = document.querySelectorAll(selector);
+      if (els.length > 0) {
+        results.fileCandidate.push({
+          selector,
+          count: els.length,
+          samples: Array.from(els).slice(0, 3).map(e => ({
+            tag: e.tagName,
+            href: e.href || e.querySelector('a')?.href || null,
+            text: e.textContent?.trim().slice(0, 80),
+            dataTid: e.getAttribute('data-tid') || null,
+            ariaLabel: e.getAttribute('aria-label')?.slice(0, 80) || null,
+          })),
+        });
+      }
+    } catch { /* invalid selector */ }
+  });
+
+  // 9. iframeの検出
   const iframes = document.querySelectorAll('iframe');
   results.iframes = Array.from(iframes).map(f => ({
     src: f.src || '(no src)',

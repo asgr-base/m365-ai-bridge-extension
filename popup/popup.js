@@ -132,6 +132,12 @@ inspectBtn.addEventListener('click', async () => {
           `  ${c.selector}: ${c.count}件 tag=${c.sampleTag}`
         ),
         '',
+        `--- ファイル添付候補 ---`,
+        ...(d.fileCandidate || []).map(c =>
+          `  ${c.selector}: ${c.count}件\n` +
+          c.samples.map(s => `    href=${(s.href || '').slice(0, 60)} | ${s.text?.slice(0, 50) || ''}`).join('\n')
+        ),
+        '',
         `--- DM id候補（上位15件） ---`,
         ...(d.dmIdElements || []).map(e =>
           `  [${e.tag}] id=${e.id} tid=${e.dataTid} parent=${e.parentDataTid} | ${e.textSample}`
