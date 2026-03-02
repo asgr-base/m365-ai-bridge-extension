@@ -71,12 +71,45 @@ function debounce(fn, ms) {
   };
 }
 
-// ========== メッセージ取得 ==========
+// ========== ファイル添付抽出 ==========
 
 /**
- * 現在表示されている Teams メッセージを DOM から取得する
- * @returns {Object} { context, messages }
+ * メッセージコンテナ内のファイル添付情報を抽出する
+ * @param {Element} container - メッセージのコンテナ要素
+ * @returns {Array<{name: string}>} 添付ファイル情報の配列
  */
+function extractAttachments(container) {
+  const fileRoots = container.querySelectorAll('[data-tid="file-preview-root"]');
+  if (fileRoots.length === 0) return [];
+
+  const attachments = [];
+  fileRoots.forEach(root => {
+    // 1. textContent の1行目からファイル名を取得（最もクリーン）
+    const textName = root.textContent?.trim().split('\n')[0]?.trim();
+
+    // 2. button の aria-label からフォールバック
+    //    「ファイル XXX の画像プレビュー」形式の場合はファイル名だけ抽出
+    let ariaName = null;
+    if (!textName) {
+      const btn = root.querySelector('button[aria-label]');
+      const raw = btn?.getAttribute('aria-label')?.trim();
+      if (raw) {
+        const m = raw.match(/^ファイル\s+(.+?)\s+の画像プレビュー$/);
+        ariaName = m ? m[1] : raw;
+      }
+    }
+
+    const name = textName || ariaName || null;
+    if (name) {
+      attachments.push({ name });
+    }
+  });
+
+  return attachments;
+}
+
+// ========== メッセージ取得 ==========
+
 /**
  * DM / グループチャット向け抽出
  * chat-pane-item コンテナ + message-author-name セレクタを使用
@@ -107,6 +140,8 @@ function extractDMMessages() {
       null
     );
 
+    const attachments = extractAttachments(item);
+
     messages.push({
       index: messages.length,
       sender: senderEl?.textContent?.trim() || 'Unknown',
@@ -114,6 +149,7 @@ function extractDMMessages() {
       timestamp: timeEl?.getAttribute('datetime') || timeEl?.textContent?.trim() || '',
       messageId,
       url: deepLink,
+      ...(attachments.length > 0 && { attachments }),
     });
   });
 
@@ -176,6 +212,8 @@ function extractMessages() {
       context.channelName
     );
 
+    const attachments = extractAttachments(container);
+
     messages.push({
       index,
       sender: senderEl?.textContent?.trim() || avatarAriaLabel || 'Unknown',
@@ -183,6 +221,7 @@ function extractMessages() {
       timestamp: timeEl?.getAttribute('datetime') || timeEl?.textContent?.trim() || '',
       messageId,
       url: deepLink,
+      ...(attachments.length > 0 && { attachments }),
     });
   });
 
@@ -690,6 +729,185 @@ function inspectDom() {
   return results;
 }
 
+// ========== トークン調査 ==========
+
+/**
+ * Teams ページ内の MSAL / アクセストークンの格納場所を調査する。
+ * sessionStorage, localStorage, cookie のキーパターンを検出する。
+ * トークン値自体は先頭20文字のみ返す（セキュリティ配慮）。
+ */
+function inspectTokenStorage() {
+  const results = {
+    sessionStorage: [],
+    localStorage: [],
+    cookies: [],
+    graphTokenFound: false,
+    tokenSummary: {},
+  };
+
+  // 1. sessionStorage を調査
+  try {
+    for (let i = 0; i < sessionStorage.length; i++) {
+      const key = sessionStorage.key(i);
+      const value = sessionStorage.getItem(key);
+      // MSAL 関連キーまたはアクセストークンを検出
+      if (key.match(/msal|token|auth|access|bearer|credential/i) ||
+          (value && value.length > 100 && value.startsWith('ey'))) {
+        results.sessionStorage.push({
+          key: key.slice(0, 100),
+          valueLength: value?.length || 0,
+          valuePreview: value?.slice(0, 20) + '...',
+          looksLikeJwt: value?.startsWith('eyJ') || false,
+        });
+      }
+    }
+  } catch (e) {
+    results.sessionStorage.push({ error: e.message });
+  }
+
+  // 2. localStorage を調査
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      const value = localStorage.getItem(key);
+      if (key.match(/msal|token|auth|access|bearer|credential/i) ||
+          (value && value.length > 100 && value.startsWith('ey'))) {
+        results.localStorage.push({
+          key: key.slice(0, 100),
+          valueLength: value?.length || 0,
+          valuePreview: value?.slice(0, 20) + '...',
+          looksLikeJwt: value?.startsWith('eyJ') || false,
+        });
+      }
+    }
+  } catch (e) {
+    results.localStorage.push({ error: e.message });
+  }
+
+  // 3. cookie を調査（アクセス可能な範囲）
+  try {
+    const cookies = document.cookie.split(';').map(c => c.trim());
+    cookies.forEach(cookie => {
+      const [name, ...rest] = cookie.split('=');
+      const value = rest.join('=');
+      if (name.match(/msal|token|auth|access|bearer/i) ||
+          (value && value.length > 100 && value.startsWith('ey'))) {
+        results.cookies.push({
+          name: name.trim(),
+          valueLength: value?.length || 0,
+          valuePreview: value?.slice(0, 20) + '...',
+          looksLikeJwt: value?.startsWith('eyJ') || false,
+        });
+      }
+    });
+  } catch (e) {
+    results.cookies.push({ error: e.message });
+  }
+
+  // 4. tmp.auth.v1 形式のトークンを詳細調査（Teams の主要トークン格納形式）
+  results.serviceTokens = [];
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      // tmp.auth.v1.*.Token.* パターンを検索
+      if (!key.includes('.Token.')) continue;
+
+      const value = localStorage.getItem(key);
+      if (!value || value.length < 100) continue;
+
+      try {
+        const parsed = JSON.parse(value);
+        const token = parsed?.item?.token;
+        if (!token || token.length < 50) continue;
+
+        // サービス名をキーから抽出
+        const serviceMatch = key.match(/\.Token\.(.+)$/);
+        const service = serviceMatch ? serviceMatch[1] : 'unknown';
+
+        const tokenInfo = {
+          key: key.slice(0, 120),
+          service,
+          tokenLength: token.length,
+          looksLikeJwt: token.startsWith('eyJ'),
+          tokenPreview: token.slice(0, 20) + '...',
+          shouldRefresh: parsed?.shouldRefresh || false,
+        };
+
+        results.serviceTokens.push(tokenInfo);
+
+        // Graph API トークンを特別に記録
+        if (service.includes('GRAPH.MICROSOFT.COM')) {
+          results.graphTokenFound = true;
+          results.tokenSummary = {
+            source: 'localStorage (tmp.auth.v1)',
+            key: key.slice(0, 120),
+            service,
+            tokenLength: token.length,
+            looksLikeJwt: token.startsWith('eyJ'),
+            tokenPreview: token.slice(0, 20) + '...',
+          };
+        }
+      } catch { /* not JSON */ }
+    }
+  } catch (e) {
+    results.serviceTokens.push({ error: e.message });
+  }
+
+  // 5. MSAL キャッシュ構造を調査（credentialType 形式 — 実際のトークンはここ）
+  results.msalTokens = [];
+  try {
+    const storages = [sessionStorage, localStorage];
+    for (const storage of storages) {
+      const storageName = storage === sessionStorage ? 'sessionStorage' : 'localStorage';
+      for (let i = 0; i < storage.length; i++) {
+        const key = storage.key(i);
+        const value = storage.getItem(key);
+        if (!value || value.length < 50) continue;
+        try {
+          const parsed = JSON.parse(value);
+          if (parsed.credentialType === 'AccessToken' && parsed.secret) {
+            const target = parsed.target || '';
+            const isGraph = target.toLowerCase().includes('graph.microsoft.com');
+            const isSharePoint = key.toLowerCase().includes('sharepoint') ||
+                                 target.toLowerCase().includes('sharepoint');
+
+            const tokenInfo = {
+              source: storageName,
+              key: key.slice(0, 120),
+              target: target.slice(0, 200),
+              expiresOn: parsed.expiresOn,
+              realm: parsed.realm,
+              tokenLength: parsed.secret.length,
+              looksLikeJwt: parsed.secret.startsWith('eyJ'),
+              isGraph,
+              isSharePoint,
+            };
+            results.msalTokens.push(tokenInfo);
+
+            // Graph API トークンを特別に記録
+            if (isGraph && !results.graphTokenFound) {
+              results.graphTokenFound = true;
+              results.tokenSummary = {
+                source: storageName,
+                service: 'GRAPH.MICROSOFT.COM',
+                key: key.slice(0, 120),
+                target: target.slice(0, 200),
+                expiresOn: parsed.expiresOn,
+                tokenLength: parsed.secret.length,
+                looksLikeJwt: parsed.secret.startsWith('eyJ'),
+              };
+            }
+          }
+        } catch { /* not JSON */ }
+      }
+    }
+  } catch (e) {
+    results.msalTokens.push({ error: e.message });
+  }
+
+  return results;
+}
+
 // ========== ブリッジサーバー通信 ==========
 
 /**
@@ -746,6 +964,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     case 'INSPECT_DOM': {
       const result = inspectDom();
       log('log', 'DOM構造調査完了:', result.summary);
+      sendResponse({ success: true, data: result });
+      break;
+    }
+
+    case 'INSPECT_TOKEN': {
+      const result = inspectTokenStorage();
+      log('log', 'トークン調査完了:', result.graphTokenFound ? 'Graph Token 検出' : '未検出');
       sendResponse({ success: true, data: result });
       break;
     }

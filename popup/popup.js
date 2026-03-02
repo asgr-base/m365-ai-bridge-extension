@@ -17,11 +17,39 @@ function setStatus(dotEl, labelEl, state, text) {
   labelEl.textContent = text;
 }
 
+const outputWrapper = document.getElementById('output-wrapper');
+const copyBtn = document.getElementById('copy-btn');
+
 function showOutput(text, type = 'normal') {
-  output.style.display = 'block';
+  outputWrapper.style.display = 'block';
   output.className = `output ${type}`;
   output.textContent = text;
 }
+
+// ========== クリップボードコピー ==========
+
+copyBtn.addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText(output.textContent);
+    copyBtn.textContent = 'OK';
+    copyBtn.classList.add('copied');
+    setTimeout(() => {
+      copyBtn.textContent = 'コピー';
+      copyBtn.classList.remove('copied');
+    }, 1500);
+  } catch {
+    // フォールバック: execCommand
+    const range = document.createRange();
+    range.selectNodeContents(output);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+    document.execCommand('copy');
+    sel.removeAllRanges();
+    copyBtn.textContent = 'OK';
+    setTimeout(() => { copyBtn.textContent = 'コピー'; }, 1500);
+  }
+});
 
 // ========== 初期化: 接続状態チェック ==========
 
@@ -67,9 +95,13 @@ readBtn.addEventListener('click', async () => {
         `コンテキスト: ${context.channelName || context.chatTitle || context.pageTitle}`,
         `メッセージ数: ${messages.length}件`,
         '',
-        ...messages.slice(0, 5).map((m, i) =>
-          `[${i + 1}] ${m.sender}: ${m.body.slice(0, 60)}${m.body.length > 60 ? '...' : ''}`
-        ),
+        ...messages.slice(0, 5).map((m, i) => {
+          let line = `[${i + 1}] ${m.sender}: ${m.body.slice(0, 60)}${m.body.length > 60 ? '...' : ''}`;
+          if (m.attachments?.length > 0) {
+            line += `\n     添付: ${m.attachments.map(a => a.name).join(', ')}`;
+          }
+          return line;
+        }),
         messages.length > 5 ? `... 他 ${messages.length - 5} 件` : '',
       ].filter(Boolean).join('\n');
 
@@ -179,6 +211,83 @@ inspectBtn.addEventListener('click', async () => {
   } finally {
     inspectBtn.disabled = false;
     inspectBtn.textContent = 'DOM構造を調査';
+  }
+});
+
+// ========== トークン調査 ==========
+
+const tokenBtn = document.getElementById('token-btn');
+
+tokenBtn.addEventListener('click', async () => {
+  tokenBtn.disabled = true;
+  tokenBtn.textContent = '調査中...';
+  showOutput('Teams のトークンストレージを調査中...', 'normal');
+
+  try {
+    const res = await chrome.runtime.sendMessage({ action: 'INSPECT_TOKEN' });
+    if (res?.success && res?.data) {
+      const d = res.data;
+      const lines = [
+        `=== トークンストレージ調査結果 ===`,
+        `Graph Token 検出: ${d.graphTokenFound ? 'YES' : 'NO'}`,
+        '',
+        `--- sessionStorage (${d.sessionStorage.length}件) ---`,
+        ...d.sessionStorage.map(e =>
+          e.error ? `  エラー: ${e.error}` :
+          `  ${e.key}\n    長さ=${e.valueLength} JWT=${e.looksLikeJwt} preview=${e.valuePreview}`
+        ),
+        '',
+        `--- localStorage (${d.localStorage.length}件) ---`,
+        ...d.localStorage.map(e =>
+          e.error ? `  エラー: ${e.error}` :
+          `  ${e.key}\n    長さ=${e.valueLength} JWT=${e.looksLikeJwt} preview=${e.valuePreview}`
+        ),
+        '',
+        `--- cookies (${d.cookies.length}件) ---`,
+        ...d.cookies.map(e =>
+          e.error ? `  エラー: ${e.error}` :
+          `  ${e.name}\n    長さ=${e.valueLength} JWT=${e.looksLikeJwt}`
+        ),
+      ];
+
+      if (d.msalTokens?.length > 0) {
+        lines.push(
+          '',
+          `--- MSAL AccessToken (${d.msalTokens.length}件) ---`,
+          ...d.msalTokens.map(t =>
+            t.error ? `  エラー: ${t.error}` :
+            `  ${t.isGraph ? '[Graph]' : t.isSharePoint ? '[SPO]' : '[Other]'} 長さ=${t.tokenLength} JWT=${t.looksLikeJwt}\n` +
+            `    target: ${t.target?.slice(0, 80)}\n` +
+            `    expires: ${t.expiresOn}`
+          ),
+        );
+      }
+
+      if (d.graphTokenFound && d.tokenSummary) {
+        const t = d.tokenSummary;
+        lines.push(
+          '',
+          `--- Graph Token 詳細 ---`,
+          `  source: ${t.source}`,
+          `  service: ${t.service}`,
+          `  target: ${t.target?.slice(0, 100)}`,
+          `  tokenLength: ${t.tokenLength}`,
+          `  JWT: ${t.looksLikeJwt}`,
+          `  expires: ${t.expiresOn}`,
+        );
+      }
+
+      showOutput(lines.join('\n'), d.graphTokenFound ? 'success' : 'normal');
+
+      console.log('[M365 AI Bridge] トークン調査結果:', JSON.stringify(res.data, null, 2));
+    } else {
+      showOutput(`エラー: ${res?.error || 'トークン調査失敗'}`, 'error');
+    }
+  } catch (err) {
+    showOutput(`例外: ${err.message}`, 'error');
+  } finally {
+    tokenBtn.disabled = false;
+    tokenBtn.textContent = 'トークン調査';
   }
 });
 

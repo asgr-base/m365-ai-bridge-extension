@@ -118,6 +118,9 @@ async function handleRequest(request) {
     case 'INSPECT_DOM':
       return await sendToTeams('INSPECT_DOM');
 
+    case 'INSPECT_TOKEN':
+      return await sendToTeams('INSPECT_TOKEN');
+
     case 'GET_STATUS': {
       const tab = await getTeamsTab();
       return {

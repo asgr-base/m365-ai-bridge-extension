@@ -105,15 +105,20 @@
 
     .btn-secondary:hover { background: #e0e0e0; }
 
+    .output-wrapper {
+      position: relative;
+      margin-top: 8px;
+    }
+
     .output {
       background: #f8f8f8;
       border: 1px solid #e0e0e0;
       border-radius: 4px;
       padding: 8px;
-      margin-top: 8px;
+      padding-top: 28px;
       font-size: 11px;
       font-family: monospace;
-      max-height: 120px;
+      max-height: 200px;
       overflow-y: auto;
       white-space: pre-wrap;
       color: #555;
@@ -121,6 +126,24 @@
 
     .output.error { color: #c62828; background: #ffebee; border-color: #ffcdd2; }
     .output.success { color: #1b5e20; background: #f1f8e9; border-color: #c8e6c9; }
+
+    .copy-btn {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      width: auto;
+      padding: 2px 8px;
+      font-size: 10px;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+      background: #fff;
+      color: #666;
+      cursor: pointer;
+      z-index: 1;
+    }
+
+    .copy-btn:hover { background: #eee; }
+    .copy-btn.copied { background: #e8f5e9; color: #2e7d32; border-color: #a5d6a7; }
 
     .footer {
       padding: 8px 16px;
@@ -169,7 +192,11 @@
     <div class="section-title">操作</div>
     <button class="btn-primary" id="read-btn">メッセージを読み取る</button>
     <button class="btn-secondary" id="inspect-btn">DOM構造を調査</button>
-    <div class="output" id="output" style="display:none;"></div>
+    <button class="btn-secondary" id="token-btn">トークン調査</button>
+    <div class="output-wrapper" id="output-wrapper" style="display:none;">
+      <button class="copy-btn" id="copy-btn">コピー</button>
+      <div class="output" id="output"></div>
+    </div>
   </div>
 
   <div class="section">
