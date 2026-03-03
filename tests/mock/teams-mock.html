@@ -11,32 +11,57 @@
   <!-- メッセージ一覧（新 Teams UI の DOM 構造を模倣） -->
   <div class="message-list">
 
+    <!-- メッセージ1: メンション(TO+CC)あり、返信2件 -->
     <div data-tid="channel-pane-message" id="msg-1770001">
       <div data-tid="post-message-subheader">
         <div data-tid="post-message-header-avatar"></div>
         <span id="author-1770001" class="fui-StyledText">田中 太郎</span>
       </div>
       <div data-tid="timestamp" datetime="2026-02-26T09:00:00Z">09:00</div>
-      <div id="message-body-1770001" data-tid="message-body">
-        おはようございます。今日のスプリントレビューの準備できていますか？
+      <div id="message-body-1770001" data-tid="message-body"><div><span dir="auto" itemtype="http://schema.skype.com/Mention" class="fui-StyledText">山田</span>&nbsp;<span dir="auto" itemtype="http://schema.skype.com/Mention" class="fui-StyledText">花子</span>
+cc <span dir="auto" itemtype="http://schema.skype.com/Mention" class="fui-StyledText">中村</span>&nbsp;<span dir="auto" itemtype="http://schema.skype.com/Mention" class="fui-StyledText">太一</span>
+おはようございます。今日のスプリントレビューの準備できていますか？</div></div>
+      <!-- 返信1 -->
+      <div data-tid="reply-message-header">
+        <div data-tid="reply-message-header-avatar"></div>
+        <span id="author-reply-1770001a" class="fui-StyledText">山田 花子</span>
+      </div>
+      <div data-tid="timestamp" datetime="2026-02-26T09:03:00Z">09:03</div>
+      <div id="message-body-reply-1770001a" data-tid="message-body">
+        はい、準備できています。
+      </div>
+      <!-- 返信2 -->
+      <div data-tid="reply-message-header">
+        <div data-tid="reply-message-header-avatar"></div>
+        <span id="author-reply-1770001b" class="fui-StyledText">中村 太一</span>
+      </div>
+      <div data-tid="timestamp" datetime="2026-02-26T09:05:00Z">09:05</div>
+      <div id="message-body-reply-1770001b" data-tid="message-body">
+        了解です。13時からですね。
       </div>
     </div>
 
+    <!-- メッセージ2: メンション(TOのみ)あり、返信なし、ファイル添付あり -->
     <div data-tid="channel-pane-message" id="msg-1770002">
       <div data-tid="post-message-subheader">
         <div data-tid="post-message-header-avatar"></div>
         <span id="author-1770002" class="fui-StyledText">山田 花子</span>
       </div>
       <div data-tid="timestamp" datetime="2026-02-26T09:05:00Z">09:05</div>
-      <div id="message-body-1770002" data-tid="message-body">
-        はい、資料は昨日完成しました。共有します。
+      <div id="message-body-1770002" data-tid="message-body"><div><span dir="auto" itemtype="http://schema.skype.com/Mention" class="fui-StyledText">田中</span>&nbsp;<span dir="auto" itemtype="http://schema.skype.com/Mention" class="fui-StyledText">太郎</span>
+資料は昨日完成しました。共有します。</div></div>
+      <!-- ファイル添付（テスト用） -->
+      <div data-tid="file-preview-root">
+        <span>quarterly-report.xlsx</span>
+        <button aria-label="ファイル quarterly-report.xlsx の画像プレビュー">Preview</button>
       </div>
     </div>
 
+    <!-- メッセージ3: メンションなし、返信なし -->
     <div data-tid="channel-pane-message" id="msg-1770003">
-      <div data-tid="reply-message-header">
+      <div data-tid="post-message-subheader">
         <div data-tid="post-message-header-avatar"></div>
-        <span id="author-1770003" class="fui-StyledText">都甲 篤史</span>
+        <span id="author-1770003" class="fui-StyledText">中村 太一</span>
       </div>
       <div data-tid="timestamp" datetime="2026-02-26T09:10:00Z">09:10</div>
       <div id="message-body-1770003" data-tid="message-body">
@@ -53,6 +78,24 @@
   <script>
     // テスト用: content script が注入されたことを確認するフラグ
     window.__teamsPageReady = true;
+
+    // トークンストレージのモック（inspectTokenStorage テスト用）
+    try {
+      sessionStorage.setItem('msal.token.cache', JSON.stringify({
+        credentialType: 'AccessToken',
+        secret: 'eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.mockSessionToken' + 'x'.repeat(100),
+        target: 'https://graph.microsoft.com/.default',
+        expiresOn: '9999999999',
+        realm: 'test-tenant-id',
+      }));
+      localStorage.setItem('test-user.test-tenant-accesstoken-graph', JSON.stringify({
+        credentialType: 'AccessToken',
+        secret: 'eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.mockGraphToken' + 'x'.repeat(200),
+        target: 'https://graph.microsoft.com/.default openid profile',
+        expiresOn: '9999999999',
+        realm: 'test-tenant-id',
+      }));
+    } catch (e) { /* storage unavailable in some test contexts */ }
   </script>
 </body>
 </html>

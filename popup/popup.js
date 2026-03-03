@@ -178,6 +178,29 @@ inspectBtn.addEventListener('click', async () => {
           f.urlElements?.length === 0 ? '    (URLを持つ子要素なし)' : '',
         ]),
         '',
+        `--- メンション候補 ---`,
+        ...(d.mentionCandidate || []).map(c =>
+          `  ${c.selector} [${c.scope}]: ${c.count}件\n` +
+          (c.samples || []).map(s =>
+            `    text="${s.text}" classes="${s.classes}" attrs=[${s.attrs}]` +
+            (s.parentTag ? ` parent=${s.parentTag}(${s.parentTid || ''})` : '')
+          ).join('\n')
+        ),
+        ...(d.messageBodySpans || []).length > 0 ? [
+          '',
+          `--- message-body[0] 内 span 要素 ---`,
+          ...(d.messageBodySpans || []).map(s =>
+            `  text="${s.text}" classes="${s.classes}" id="${s.id}" attrs=[${s.attrs}] children=${s.childCount}`
+          ),
+        ] : [],
+        ...(d.messageBodySpans2 || []).length > 0 ? [
+          '',
+          `--- message-body[1] 内 span 要素 ---`,
+          ...(d.messageBodySpans2 || []).map(s =>
+            `  text="${s.text}" classes="${s.classes}" attrs=[${s.attrs}]`
+          ),
+        ] : [],
+        '',
         `--- DM id候補（上位15件） ---`,
         ...(d.dmIdElements || []).map(e =>
           `  [${e.tag}] id=${e.id} tid=${e.dataTid} parent=${e.parentDataTid} | ${e.textSample}`

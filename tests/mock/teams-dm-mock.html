@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Teams Mock - DM</title>
+</head>
+<body>
+  <!-- DM / グループチャット タイトル -->
+  <div data-tid="chat-title">佐藤 一郎</div>
+
+  <!-- DM メッセージ一覧（chat-pane-item 構造を模倣） -->
+
+  <!-- DM メッセージ1: メンションあり -->
+  <div data-tid="chat-pane-item" id="dm-item-1">
+    <div data-tid="message-author-name">佐藤 一郎</div>
+    <time datetime="2026-02-27T14:00:00Z">14:00</time>
+    <div data-tid="chat-pane-message" id="message-body-1770100"><div><span dir="auto" itemtype="http://schema.skype.com/Mention" class="fui-StyledText">中村</span>&nbsp;<span dir="auto" itemtype="http://schema.skype.com/Mention" class="fui-StyledText">太一</span>
+DMのテストメッセージです。ファイルを共有しました。</div></div>
+    <div data-tid="file-preview-root">
+      <span>shared-doc.pdf</span>
+    </div>
+  </div>
+
+  <!-- DM メッセージ2: メンションなし -->
+  <div data-tid="chat-pane-item" id="dm-item-2">
+    <div data-tid="message-author-name">中村 太一</div>
+    <time datetime="2026-02-27T14:05:00Z">14:05</time>
+    <div data-tid="chat-pane-message" id="message-body-1770101">
+      ありがとうございます。確認します。
+    </div>
+  </div>
+
+  <!-- DM メッセージ3: メンションなし、ファイル添付あり -->
+  <div data-tid="chat-pane-item" id="dm-item-3">
+    <div data-tid="message-author-name">佐藤 一郎</div>
+    <time datetime="2026-02-27T14:10:00Z">14:10</time>
+    <div data-tid="chat-pane-message" id="message-body-1770102">
+      こちらの資料も確認お願いします。
+    </div>
+    <div data-tid="file-preview-root">
+      <button aria-label="ファイル presentation.pptx の画像プレビュー"></button>
+    </div>
+  </div>
+
+  <!-- 返信フォーム -->
+  <div data-tid="ckeditor" contenteditable="true" role="textbox" aria-label="返信を入力"></div>
+
+  <script>
+    window.__teamsPageReady = true;
+  </script>
+</body>
+</html>

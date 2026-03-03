@@ -32,14 +32,30 @@ function log(...args) {
   console.log(`[${new Date().toISOString()}]`, ...args);
 }
 
-function jsonResponse(res, statusCode, data) {
+const ALLOWED_ORIGINS = [
+  'https://teams.microsoft.com',
+  'https://teams.cloud.microsoft',
+];
+
+function getCorsOrigin(req) {
+  const origin = req.headers.origin;
+  if (!origin) return ALLOWED_ORIGINS[0];
+  if (ALLOWED_ORIGINS.includes(origin)) return origin;
+  if (/^https:\/\/[a-z0-9-]+\.teams\.microsoft\.com$/.test(origin)) return origin;
+  if (/^https:\/\/[a-z0-9-]+\.teams\.cloud\.microsoft$/.test(origin)) return origin;
+  if (/^chrome-extension:\/\/[a-z]{32}$/.test(origin)) return origin;
+  return null;
+}
+
+function jsonResponse(res, statusCode, data, corsOrigin) {
   const body = JSON.stringify(data, null, 2);
-  res.writeHead(statusCode, {
+  const headers = {
     'Content-Type': 'application/json',
-    'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
-  });
+  };
+  if (corsOrigin) headers['Access-Control-Allow-Origin'] = corsOrigin;
+  res.writeHead(statusCode, headers);
   res.end(body);
 }
 
@@ -62,14 +78,16 @@ function readBody(req) {
 
 const server = http.createServer(async (req, res) => {
   const { method, url } = req;
+  const corsOrigin = getCorsOrigin(req);
 
   // CORS プリフライト
   if (method === 'OPTIONS') {
-    res.writeHead(204, {
-      'Access-Control-Allow-Origin': '*',
+    const headers = {
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type',
-    });
+    };
+    if (corsOrigin) headers['Access-Control-Allow-Origin'] = corsOrigin;
+    res.writeHead(204, headers);
     return res.end();
   }
 
@@ -78,7 +96,7 @@ const server = http.createServer(async (req, res) => {
   try {
     // GET /health
     if (method === 'GET' && url === '/health') {
-      return jsonResponse(res, 200, { status: 'ok', version: '0.1.0' });
+      return jsonResponse(res, 200, { status: 'ok', version: '0.1.0' }, corsOrigin);
     }
 
     // GET /status
@@ -91,7 +109,7 @@ const server = http.createServer(async (req, res) => {
           receivedAt: messageBufferAt,
         } : null,
         pendingReply: pendingReply ? pendingReply.slice(0, 50) + '...' : null,
-      });
+      }, corsOrigin);
     }
 
     // GET /messages — Claude Code がメッセージを取得する
@@ -99,12 +117,12 @@ const server = http.createServer(async (req, res) => {
       if (!messageBuffer) {
         return jsonResponse(res, 404, {
           error: 'No messages available. Open Teams and click "メッセージを読み取る" in the extension popup.',
-        });
+        }, corsOrigin);
       }
       return jsonResponse(res, 200, {
         ...messageBuffer,
         receivedAt: messageBufferAt,
-      });
+      }, corsOrigin);
     }
 
     // POST /messages — Extension からメッセージデータを受信
@@ -113,39 +131,39 @@ const server = http.createServer(async (req, res) => {
       messageBuffer = data;
       messageBufferAt = new Date().toISOString();
       log(`メッセージ受信: ${data.messages?.length || 0}件 (${data.context?.channelName || data.context?.chatTitle || 'unknown'})`);
-      return jsonResponse(res, 200, { success: true, messageCount: data.messages?.length || 0 });
+      return jsonResponse(res, 200, { success: true, messageCount: data.messages?.length || 0 }, corsOrigin);
     }
 
     // POST /reply — Claude Code が返信テキストを Extension に送信する
     if (method === 'POST' && url === '/reply') {
       const { text } = await readBody(req);
       if (!text) {
-        return jsonResponse(res, 400, { error: 'text is required' });
+        return jsonResponse(res, 400, { error: 'text is required' }, corsOrigin);
       }
       pendingReply = text;
       log(`返信テキストを受信: ${text.slice(0, 80)}...`);
 
       // TODO: Phase 2 で Extension へのプッシュ実装（WebSocket等）
       // 現在は Extension がポーリングで取得する方式
-      return jsonResponse(res, 200, { success: true, message: 'Reply queued. Extension will pick it up on next poll.' });
+      return jsonResponse(res, 200, { success: true, message: 'Reply queued. Extension will pick it up on next poll.' }, corsOrigin);
     }
 
     // GET /pending-reply — Extension が返信テキストをポーリングで取得
     if (method === 'GET' && url === '/pending-reply') {
       if (!pendingReply) {
-        return jsonResponse(res, 200, { pending: false });
+        return jsonResponse(res, 200, { pending: false }, corsOrigin);
       }
       const reply = pendingReply;
       pendingReply = null; // 取得後にクリア
-      return jsonResponse(res, 200, { pending: true, text: reply });
+      return jsonResponse(res, 200, { pending: true, text: reply }, corsOrigin);
     }
 
     // 404
-    return jsonResponse(res, 404, { error: `Not found: ${method} ${url}` });
+    return jsonResponse(res, 404, { error: `Not found: ${method} ${url}` }, corsOrigin);
 
   } catch (err) {
     log('エラー:', err.message);
-    return jsonResponse(res, 500, { error: err.message });
+    return jsonResponse(res, 500, { error: err.message }, corsOrigin);
   }
 });
 

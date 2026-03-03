@@ -121,6 +121,9 @@ async function handleRequest(request) {
     case 'INSPECT_TOKEN':
       return await sendToTeams('INSPECT_TOKEN');
 
+    case 'GET_GRAPH_TOKEN':
+      return await sendToTeams('GET_GRAPH_TOKEN');
+
     case 'GET_STATUS': {
       const tab = await getTeamsTab();
       return {

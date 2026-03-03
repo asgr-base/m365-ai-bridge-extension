@@ -108,6 +108,99 @@ function extractAttachments(container) {
   return attachments;
 }
 
+// ========== メンション抽出 ==========
+
+/**
+ * メッセージコンテナ内の @mention 要素を抽出し、TO/CC に分類する。
+ * Teams は各メンションの単語ごとに個別の <span itemtype="http://schema.skype.com/Mention"> を生成するため、
+ * 連続するスパンをグループ化して1人分の名前を組み立てる。
+ *
+ * @param {Element} bodyEl - message-body 要素
+ * @returns {{ to: string[], cc: string[] } | null}
+ */
+function extractMentions(bodyEl) {
+  if (!bodyEl) return null;
+
+  const MENTION_SELECTOR = 'span[itemtype="http://schema.skype.com/Mention"]';
+  const allMentionSpans = Array.from(bodyEl.querySelectorAll(MENTION_SELECTOR));
+  if (allMentionSpans.length === 0) return null;
+
+  // 連続するメンションスパン間のテキストと DOM 構造を分析し、人物ごとにグループ化する
+  const groups = []; // { name: string, textAfter: string }
+  let currentParts = [allMentionSpans[0].textContent?.trim() || ''];
+
+  for (let i = 1; i < allMentionSpans.length; i++) {
+    const prev = allMentionSpans[i - 1];
+    const curr = allMentionSpans[i];
+
+    // 2つのスパン間のテキストを取得
+    let textBetween = '';
+    try {
+      const range = document.createRange();
+      range.setStartAfter(prev);
+      range.setEndBefore(curr);
+      textBetween = range.toString();
+    } catch { /* Range API 失敗時は空文字 */ }
+
+    let isBoundary = false;
+
+    // Rule 1: "cc" キーワード → TO/CC 境界
+    if (/\bcc\b/i.test(textBetween)) {
+      isBoundary = true;
+    }
+    // Rule 2: カンマ → 別人の区切り
+    else if (textBetween.includes(',')) {
+      isBoundary = true;
+    }
+    // Rule 3: 長い非空白テキスト → メッセージ本文に到達
+    else if (textBetween.replace(/[\s\u3000]/g, '').length > 3) {
+      isBoundary = true;
+    }
+    // Rule 4: 全角スペース → 別人の区切り
+    else if (/\u3000/.test(textBetween)) {
+      isBoundary = true;
+    }
+    // Rule 5: スパン間にテキストノードがない（空文字） → 別人
+    // Teams の実 DOM: 各メンション単語は個別の <div> ラッパーに入っている。
+    // 同一人物の単語間は \u00a0 (NBSP) テキストノードで結合。
+    // 異なる人物の単語間はテキストノードなし（空文字）。
+    else if (textBetween === '') {
+      isBoundary = true;
+    }
+    // else: 空白テキスト（\u00a0 等） → 同一人物の名前パーツ
+
+    if (isBoundary) {
+      if (currentParts.length > 0) {
+        groups.push({ name: currentParts.join(' '), textAfter: textBetween });
+        currentParts = [];
+      }
+    }
+
+    currentParts.push(curr.textContent?.trim() || '');
+  }
+
+  // 最後のグループをフラッシュ
+  if (currentParts.length > 0) {
+    groups.push({ name: currentParts.join(' '), textAfter: '' });
+  }
+
+  if (groups.length === 0) return null;
+
+  // TO/CC 分類: "cc" を含む textAfter の次のグループから CC
+  let ccStartIdx = -1;
+  for (let i = 0; i < groups.length; i++) {
+    if (/\bcc\b/i.test(groups[i].textAfter)) {
+      ccStartIdx = i + 1;
+      break;
+    }
+  }
+
+  const to = (ccStartIdx >= 0 ? groups.slice(0, ccStartIdx) : groups).map(g => g.name).filter(Boolean);
+  const cc = (ccStartIdx >= 0 ? groups.slice(ccStartIdx) : []).map(g => g.name).filter(Boolean);
+
+  return (to.length > 0 || cc.length > 0) ? { to, cc } : null;
+}
+
 // ========== メッセージ取得 ==========
 
 /**
@@ -142,6 +235,9 @@ function extractDMMessages() {
 
     const attachments = extractAttachments(item);
 
+    // メンション抽出（DM でも @mention は使われる）
+    const mentions = extractMentions(bodyEl);
+
     messages.push({
       index: messages.length,
       sender: senderEl?.textContent?.trim() || 'Unknown',
@@ -150,6 +246,7 @@ function extractDMMessages() {
       messageId,
       url: deepLink,
       ...(attachments.length > 0 && { attachments }),
+      ...(mentions && { mentions }),
     });
   });
 
@@ -214,6 +311,20 @@ function extractMessages() {
 
     const attachments = extractAttachments(container);
 
+    // メンション抽出
+    const mentions = extractMentions(bodyEl);
+
+    // スレッド構造: 返信数・返信者を取得
+    const replyHeaders = container.querySelectorAll('[data-tid="reply-message-header"]');
+    const replySenders = [];
+    replyHeaders.forEach(header => {
+      const replySenderEl = header.querySelector('span[id^="author-"]');
+      const name = replySenderEl?.textContent?.trim();
+      if (name && !replySenders.includes(name)) {
+        replySenders.push(name);
+      }
+    });
+
     messages.push({
       index,
       sender: senderEl?.textContent?.trim() || avatarAriaLabel || 'Unknown',
@@ -222,6 +333,9 @@ function extractMessages() {
       messageId,
       url: deepLink,
       ...(attachments.length > 0 && { attachments }),
+      ...(mentions && { mentions }),
+      replyCount: replyHeaders.length,
+      ...(replySenders.length > 0 && { replySenders }),
     });
   });
 
@@ -708,7 +822,169 @@ function inspectDom() {
     };
   });
 
-  // 10. iframeの検出
+  // 10. メンション候補の調査（message-body 内の子要素を分析）
+  results.mentionCandidate = [];
+  const msgBodies = document.querySelectorAll('[data-tid="message-body"]');
+  const mentionPatterns = [
+    'span[itemtype*="Mention"]',
+    'span[itemtype*="mention"]',
+    'span.at-mention',
+    'span[class*="mention"]',
+    'span[class*="Mention"]',
+    'a[class*="mention"]',
+    'span[data-tid*="mention"]',
+    '[data-tid="mention-badge"]',
+  ];
+  mentionPatterns.forEach(selector => {
+    try {
+      // ページ全体から検索
+      const globalEls = document.querySelectorAll(selector);
+      if (globalEls.length > 0) {
+        results.mentionCandidate.push({
+          selector,
+          scope: 'global',
+          count: globalEls.length,
+          samples: Array.from(globalEls).slice(0, 3).map(e => ({
+            tag: e.tagName,
+            text: e.textContent?.trim().slice(0, 60),
+            classes: e.className?.slice(0, 100),
+            attrs: Array.from(e.attributes).map(a => `${a.name}=${a.value?.slice(0, 40)}`).join(', '),
+            parentTag: e.parentElement?.tagName,
+            parentTid: e.parentElement?.getAttribute('data-tid'),
+          })),
+        });
+      }
+      // message-body 内からも検索
+      let inBodyCount = 0;
+      const inBodySamples = [];
+      msgBodies.forEach(body => {
+        const els = body.querySelectorAll(selector);
+        inBodyCount += els.length;
+        if (inBodySamples.length < 3) {
+          els.forEach(e => {
+            if (inBodySamples.length < 3) {
+              inBodySamples.push({
+                text: e.textContent?.trim().slice(0, 60),
+                classes: e.className?.slice(0, 100),
+                attrs: Array.from(e.attributes).map(a => `${a.name}=${a.value?.slice(0, 40)}`).join(', '),
+              });
+            }
+          });
+        }
+      });
+      if (inBodyCount > 0) {
+        results.mentionCandidate.push({
+          selector,
+          scope: 'inside-message-body',
+          count: inBodyCount,
+          samples: inBodySamples,
+        });
+      }
+    } catch { /* invalid selector */ }
+  });
+
+  // message-body 内の全 span 子要素の属性を調査（メンション要素の発見用）
+  results.messageBodySpans = [];
+  if (msgBodies.length > 0) {
+    const firstBody = msgBodies[0];
+    const spans = firstBody.querySelectorAll('span');
+    results.messageBodySpans = Array.from(spans).slice(0, 10).map(s => ({
+      text: s.textContent?.trim().slice(0, 40),
+      tag: s.tagName,
+      classes: s.className?.slice(0, 100),
+      id: s.id?.slice(0, 60),
+      attrs: Array.from(s.attributes)
+        .filter(a => a.name !== 'class' && a.name !== 'id')
+        .map(a => `${a.name}=${a.value?.slice(0, 60)}`)
+        .join(', '),
+      childCount: s.children.length,
+    }));
+    // 2番目の message-body も調査（異なるメッセージパターン）
+    if (msgBodies.length > 1) {
+      const secondBody = msgBodies[1];
+      const spans2 = secondBody.querySelectorAll('span');
+      results.messageBodySpans2 = Array.from(spans2).slice(0, 10).map(s => ({
+        text: s.textContent?.trim().slice(0, 40),
+        tag: s.tagName,
+        classes: s.className?.slice(0, 100),
+        attrs: Array.from(s.attributes)
+          .filter(a => a.name !== 'class' && a.name !== 'id')
+          .map(a => `${a.name}=${a.value?.slice(0, 60)}`)
+          .join(', '),
+      }));
+    }
+  }
+
+  // 11. メンションスパンの親要素構造調査（グルーピング改善用）
+  results.mentionParentStructure = [];
+  if (msgBodies.length > 0) {
+    // メンションを含む最初の message-body を分析
+    for (const body of Array.from(msgBodies).slice(0, 3)) {
+      const mentionSpans = body.querySelectorAll('span[itemtype*="Mention"]');
+      if (mentionSpans.length === 0) continue;
+
+      const spanInfos = Array.from(mentionSpans).map((s, idx) => {
+        // 親要素チェーン（bodyEl まで）
+        const parentChain = [];
+        let el = s.parentElement;
+        while (el && el !== body) {
+          parentChain.push({
+            tag: el.tagName,
+            classes: el.className?.slice(0, 80) || '',
+            attrs: Array.from(el.attributes)
+              .filter(a => !['class', 'id', 'style'].includes(a.name))
+              .map(a => `${a.name}=${a.value?.slice(0, 40)}`)
+              .join(', '),
+          });
+          el = el.parentElement;
+        }
+
+        // 前のスパンとの間のノード構造
+        let nodesBetween = null;
+        if (idx > 0) {
+          const prevSpan = mentionSpans[idx - 1];
+          const nodes = [];
+          // DOM TreeWalker で prev → curr 間のノードを収集
+          const walker = document.createTreeWalker(body, NodeFilter.SHOW_ALL);
+          let foundPrev = false;
+          let node = walker.firstChild();
+          while (node) {
+            if (node === prevSpan) { foundPrev = true; node = walker.nextNode(); continue; }
+            if (node === s) break;
+            if (foundPrev && !prevSpan.contains(node) && !s.contains(node)) {
+              nodes.push({
+                type: node.nodeType === 3 ? 'TEXT' : node.nodeType === 1 ? 'ELEMENT' : 'OTHER',
+                text: node.nodeType === 3 ? JSON.stringify(node.textContent?.slice(0, 30)) : null,
+                tag: node.nodeType === 1 ? node.tagName : null,
+                classes: node.nodeType === 1 ? (node.className?.slice(0, 50) || '') : null,
+              });
+            }
+            node = walker.nextNode();
+          }
+          nodesBetween = nodes.slice(0, 5); // 最大5ノードまで
+        }
+
+        return {
+          idx,
+          text: s.textContent?.trim().slice(0, 30),
+          parentTag: s.parentElement?.tagName,
+          parentClass: s.parentElement?.className?.slice(0, 80),
+          parentIsSameAsPrev: idx > 0 ? s.parentElement === mentionSpans[idx - 1].parentElement : null,
+          parentChain,
+          nodesBetween,
+        };
+      });
+
+      results.mentionParentStructure.push({
+        bodyId: body.id || body.getAttribute('data-tid'),
+        mentionCount: mentionSpans.length,
+        spans: spanInfos,
+      });
+      break; // 最初のメンション含むメッセージのみ
+    }
+  }
+
+  // 12. iframeの検出
   const iframes = document.querySelectorAll('iframe');
   results.iframes = Array.from(iframes).map(f => ({
     src: f.src || '(no src)',
@@ -908,6 +1184,53 @@ function inspectTokenStorage() {
   return results;
 }
 
+// ========== Graph トークン抽出 ==========
+
+/**
+ * localStorage の MSAL AccessToken キャッシュから Graph API 用 JWT を取得する。
+ * credentialType === 'AccessToken' かつ target に graph.microsoft.com を含むエントリの secret を返す。
+ * @returns {{ token: string, expiresOn: string, target: string } | null}
+ */
+function getGraphToken() {
+  try {
+    const nowSec = Math.floor(Date.now() / 1000);
+    let best = null;
+
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      try {
+        const val = localStorage.getItem(key);
+        if (!val || !val.startsWith('{')) continue;
+        const parsed = JSON.parse(val);
+        if (
+          parsed.credentialType === 'AccessToken' &&
+          typeof parsed.secret === 'string' &&
+          parsed.secret.startsWith('eyJ') &&
+          typeof parsed.target === 'string' &&
+          parsed.target.toLowerCase().includes('graph.microsoft.com')
+        ) {
+          const expiresOn = Number(parsed.expiresOn) || 0;
+          // 期限切れトークンはスキップ（60秒のマージン）
+          if (expiresOn > 0 && expiresOn < nowSec + 60) continue;
+
+          // より長い有効期限のトークンを優先
+          if (!best || expiresOn > (Number(best.expiresOn) || 0)) {
+            best = {
+              token: parsed.secret,
+              expiresOn: parsed.expiresOn || null,
+              target: parsed.target,
+            };
+          }
+        }
+      } catch { /* not JSON */ }
+    }
+    return best;
+  } catch (e) {
+    log('error', 'Graph トークン取得エラー:', e.message);
+  }
+  return null;
+}
+
 // ========== ブリッジサーバー通信 ==========
 
 /**
@@ -975,6 +1298,18 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       break;
     }
 
+    case 'GET_GRAPH_TOKEN': {
+      const tokenInfo = getGraphToken();
+      if (tokenInfo) {
+        log('log', 'Graph トークン取得成功: length=', tokenInfo.token.length);
+        sendResponse({ success: true, data: tokenInfo });
+      } else {
+        log('warn', 'Graph トークンが見つかりません');
+        sendResponse({ success: false, error: 'Graph token not found in localStorage' });
+      }
+      break;
+    }
+
     case 'PING': {
       sendResponse({ success: true, status: 'active', url: window.location.href });
       break;
@@ -992,6 +1327,25 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 // ========== 自動プッシュ ==========
 
 let lastPushHash = '';
+let lastTokenPushAt = 0;
+
+/**
+ * Graph トークンをブリッジサーバーへ送信する。
+ * 60秒間隔で送信し、トークンの有効期限が切れる前に更新を保つ。
+ */
+async function pushGraphToken() {
+  const now = Date.now();
+  if (now - lastTokenPushAt < 60000) return; // 60秒未満はスキップ
+
+  const tokenInfo = getGraphToken();
+  if (!tokenInfo) return;
+
+  const res = await sendToBridge('/token', tokenInfo);
+  if (res) {
+    lastTokenPushAt = now;
+    log('log', 'Graph トークン送信完了: length=', tokenInfo.token.length);
+  }
+}
 
 /**
  * メッセージを抽出してブリッジサーバーへ自動送信する。
@@ -1003,13 +1357,16 @@ async function autoPush() {
   const msgs = result.messages;
   const hash = `${msgs.length}:${msgs[0]?.body?.slice(0, 30) || ''}:${msgs[msgs.length - 1]?.body?.slice(0, 30) || ''}`;
 
-  if (hash === lastPushHash) return; // 変更なし → スキップ
-
-  lastPushHash = hash;
-  const res = await sendToBridge('/messages', result);
-  if (res) {
-    log('log', `自動プッシュ: ${msgs.length}件送信`);
+  if (hash !== lastPushHash) {
+    lastPushHash = hash;
+    const res = await sendToBridge('/messages', result);
+    if (res) {
+      log('log', `自動プッシュ: ${msgs.length}件送信`);
+    }
   }
+
+  // トークンも並行して送信
+  pushGraphToken();
 }
 
 // ========== 初期化 ==========

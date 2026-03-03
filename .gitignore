@@ -2,4 +2,6 @@ node_modules/
 *.log
 .DS_Store
 dist/
-node_modules/
+downloads/
+!downloads/.gitkeep
+.env*

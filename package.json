@@ -2,12 +2,12 @@
   "name": "m365-ai-bridge-extension",
   "version": "1.0.0",
   "description": "Microsoft 365（Teams、SharePoint等）と AI アシスタント（Claude Code等）を接続する Chrome Extension。",
-  "main": "index.js",
+  "main": "native/mcp-server.js",
   "directories": {
     "test": "tests"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "npx playwright test"
   },
   "repository": {
     "type": "git",
